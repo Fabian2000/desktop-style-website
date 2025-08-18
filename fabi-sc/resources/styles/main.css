@@ -1,1 +1,120 @@
-/*# sourceMappingURL=main.css.map */
+.boot-screen {
+  background-color: #000000;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.boot-screen .boot-identifier {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.boot-screen .boot-identifier .boot-logo {
+  width: 200px;
+  height: 200px;
+  background-image: url("../img/logo_inverted.webp");
+  background-size: 90%;
+  background-repeat: no-repeat;
+}
+.boot-screen .boot-animation .boot-spinner {
+  width: 40px;
+  height: 40px;
+  border: 5px solid #ccc; /* background ring */
+  border-top: 5px solid transparent; /* moving part */
+  border-radius: 50%; /* circle */
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background-image: url("../img/bg.webp");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 1000ms ease, transform 1000ms ease;
+}
+.lock-screen::before {
+  content: "";
+  position: absolute;
+  inset: -25px;
+  background: inherit;
+  filter: blur(20px);
+  z-index: -1;
+}
+.lock-screen.fade-out {
+  opacity: 0;
+  transform: scale(1.1);
+}
+.lock-screen .profile-section {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.lock-screen .profile-section .profile-picture {
+  width: 150px;
+  height: 150px;
+  background-image: url("../img/logo_inverted_bg.webp");
+  background-size: cover;
+  background-repeat: no-repeat;
+  border-radius: 100%;
+  border: solid 3px #ffffff;
+}
+.lock-screen .welcome-msg {
+  width: 100%;
+  color: #ffffff;
+  text-align: center;
+  font-size: 14pt;
+}
+.lock-screen .login-section {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.lock-screen .login-section .login-btn {
+  padding: 10px;
+  padding-left: 20px;
+  padding-right: 20px;
+  color: #ffffff;
+  border-radius: 8px;
+  background-color: #5555ff;
+  border: solid 2px #ffffff;
+  outline: none;
+}
+.lock-screen .login-section .login-btn:focus-visible {
+  outline: solid 2px #ffffff;
+}
+
+.display-none {
+  display: none;
+}
+
+html {
+  background-image: url("../img/bg.webp");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  width: 100%;
+  height: 100%;
+}
+
+* {
+  font-family: Arial, Helvetica, sans-serif;
+}/*# sourceMappingURL=main.css.map */

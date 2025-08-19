@@ -26,4 +26,5 @@ fn main() {
             eprintln!("Failed to copy {file}: {e}");
         }
     }
+    println!("cargo:warning=Copyied resources {}, {} to {}", files[0], files[1], dest_dir.display());
 }

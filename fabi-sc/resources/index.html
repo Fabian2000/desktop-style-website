@@ -6,6 +6,14 @@
         <title>Fabian's Desktop</title>
         <link rel="icon" type="image/png" href="/resources/img/logo_inverted_bg.webp">
         <link rel="stylesheet" href="/resources/styles/main.css">
+        <link rel="stylesheet" href="/resources/extern/fontawesome-free-7.0.0-web/css/all.min.css">
+        <noscript>
+            <style>
+                .boot-animation {
+                    display: none;
+                }
+            </style>
+        </noscript>
     </head>
     <body>
         <div class="lock-screen">
@@ -19,12 +27,26 @@
                 <button class="login-btn" id="lock-screen-login" type="button" autofocus>Enter</button>
             </div>
         </div>
-        <div class="boot-screen">
+        <div class="boot-screen" oncontextmenu="return false">
             <div class="boot-identifier">
                 <div class="boot-logo"></div>
             </div>
             <div class="boot-animation">
                 <div class="boot-spinner"></div>
+            </div>
+            <noscript>
+                <p style="font-size: 20pt; color: #ffffff;">&gt; [ERR] Boot progress canceled.</p>
+                <p style="font-size: 20pt; color: #ffffff;">&gt; [INF] Unable to load scripts</p>
+            </noscript>
+        </div>
+
+        <div class="top-bar">
+            <div>
+            </div>
+            <div>
+            </div>
+            <div>
+                <button class="time-btn top-bar-btn" id="top-bar-time">AT:XX</button>
             </div>
         </div>
 

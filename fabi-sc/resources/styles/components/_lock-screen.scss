@@ -12,6 +12,8 @@
     opacity: 1;
     transform: scale(1);
     transition: opacity 1000ms ease, transform 1000ms ease;
+    z-index: 999998;
+    user-select: none;
 
     &::before {
         content: "";

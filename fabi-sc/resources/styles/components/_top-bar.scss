@@ -1,0 +1,29 @@
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 30px;
+    width: 100%;
+    background-color: rgba(#111111, 0.7);
+    color: #ffffff;
+    user-select: none;
+
+    .time-btn {
+        margin-right: 5px;
+    }
+
+    .top-bar-btn {
+        border-radius: $border-radius;
+        border: none;
+        background-color: inherit;
+        color: #ffffff;
+
+        &:hover {
+            background-color: #000000;
+        }
+
+        &:focus-visible {
+            outline: solid 2px #ffffff;
+        }
+    }
+}

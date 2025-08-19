@@ -1,5 +1,5 @@
 // Build WASM first, then copy server resources into target/<profile>/resources.
-use std::{env, fs, path::{Path, PathBuf}, process::Command, ffi::OsStr};
+use std::{env, ffi::OsStr, fs, path::{Path, PathBuf}, process::Command};
 
 fn main() {
     // Build the WASM crate
@@ -31,7 +31,9 @@ fn main() {
         eprintln!("Failed to copy resources: {}", e);
     }
 
-    println!("cargo:warning=resources -> {}", dest_dir.display());
+    let src_dir = PathBuf::from("resources");
+    let abs_src_dir = src_dir.canonicalize().unwrap();
+    println!("cargo:warning={} -> {}", abs_src_dir.display(), dest_dir.display());
 }
 
 /// Derive target/<profile> from OUT_DIR (works in workspaces and everywhere)

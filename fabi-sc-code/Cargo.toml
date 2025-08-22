@@ -9,10 +9,13 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 gloo-timers = {version = "0.3.0", features = ["futures"] }
 js-sys = "0.3.77"
+lazy_static = "1.5.0"
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
 web-sys = { version = "0.3.77", features = [
   "Window","Document","Element","Node","Event","EventTarget",
-  "HtmlElement","HtmlCanvasElement","CanvasRenderingContext2d",
-  "MouseEvent","KeyboardEvent","Performance","console", "DomTokenList"
+  "HtmlElement","HtmlInputElement","HtmlCanvasElement", "HtmlCollection","CanvasRenderingContext2d",
+  "MouseEvent","KeyboardEvent","Performance","console", "DomTokenList",
+  "IdbDatabase", "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction",
+  "IdbObjectStore", "IdbTransactionMode"
 ] }

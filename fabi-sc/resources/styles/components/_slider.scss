@@ -1,0 +1,52 @@
+.slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #ccc;
+    border-radius: 3px;
+
+    &::-webkit-slider-runnable-track {
+        height: 6px;
+        background: #ccc;
+        border-radius: 3px;
+    }
+    &::-moz-range-track {
+        height: 6px;
+        background: #ccc;
+        border-radius: 3px;
+    }
+
+    &::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #fff;
+        border: none;
+        border-radius: 20px;
+        cursor: default;
+        margin-top: -7px;
+    }
+    &::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        background: #fff;
+        border: none;
+        border-radius: 20px;
+        cursor: default;
+    }
+
+    &.headphone::-webkit-slider-thumb {
+        background-image: url("../extern/fontawesome-free-7.0.0-web/svgs/solid/headphones.svg");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 50%;
+    }
+    &.headphone::-moz-range-thumb {
+        background-image: url("../extern/fontawesome-free-7.0.0-web/svgs/solid/headphones.svg");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 50%;
+    }
+}

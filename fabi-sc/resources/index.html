@@ -39,6 +39,15 @@
                 <p style="font-size: 20pt; color: #ffffff;">&gt; [INF] Unable to load scripts</p>
             </noscript>
         </div>
+        <div class="offline-screen display-none" id="offline-screen">
+            <div class="content">
+                <div class="icon"></div>
+                <h1>This site can’t be reached</h1>
+                <p>The remote desktop has been disconnected.</p>
+                <small>ERR_REMOTE_DISCONNECT</small>
+                <button onclick="location.reload()">Reload</button>
+            </div>
+        </div>
 
         <div class="top-bar">
             <div>
@@ -46,8 +55,33 @@
             <div>
             </div>
             <div>
+                <button class="top-bar-btn"><i class="fa-solid fa-user"></i></button>
+                <button class="top-bar-btn"><i class="fa-solid fa-bell"></i></button>
+                <button class="top-bar-btn" id="top-bar-wifi-audio-btn"><i class="fa-solid fa-volume-high spacer-right"></i><i class="fa-solid fa-wifi"></i></button>
                 <button class="time-btn top-bar-btn" id="top-bar-time">AT:XX</button>
             </div>
+        </div>
+        <div class="top-bar-popups">
+            <div class="wifi-speaker-popup display-none">
+                <p>Wifi connection</p>
+                <div class="long-btn-wrapper">
+                    <div>
+                        <i class="fa-solid fa-wifi powered-on"></i> fabi-sc.de
+                    </div>
+                    <button class="right-btn disconnect display-none" id="wifi-disconnect"><i class="fa-solid fa-link-slash"></i> Disconnect</button>
+                    <button class="right-btn menu" id="wifi-extended-menu"><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+                <hr>
+                <p>Volume <span id="volume-display">0%</span></p>
+                <input class="slider headphone" id="volume-slider" type="range" min="0" max="100" value="0" />
+            </div>
+        </div>
+
+        <div class="workspace">
+        </div>
+
+        <div class="taskbar">
+            <button class=""></button>
         </div>
 
         <script type="module">

@@ -4,6 +4,10 @@ fn main() {
     println!("cargo:rerun-if-changed=pkg/fabi_sc_code_bg.wasm");
     println!("cargo:rerun-if-changed=pkg/fabi_sc_code.js");
 
+    let now = chrono::Local::now();
+    println!("cargo:rustc-env=BUILD_DATE={}", now.format("%Y-%m-%d"));
+    println!("cargo:rustc-env=BUILD_TIME={}", now.format("%H:%M:%S"));
+
     let dest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("fabi-sc")

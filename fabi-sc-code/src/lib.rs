@@ -1,6 +1,6 @@
 use gloo_timers::{callback::Interval, future::TimeoutFuture};
 use wasm_bindgen::prelude::*;
-use web_sys::Event;
+use web_sys::{console, Event};
 use web_sys::{window, Document, Window};
 
 mod event_handlers;
@@ -13,6 +13,8 @@ use crate::event_handlers::top_bar_handlers::{hide_wifi_audio_popup, init_volume
 
 #[wasm_bindgen(start)]
 pub async fn main() -> Result<(), JsValue> {
+    console::log_1(&format!("Build: {} {}", env!("BUILD_DATE"), env!("BUILD_TIME")).into());
+    
     let window = window().ok_or("Unable to get the window.")?;
     let document = window.document().ok_or("Unable to get the document.")?;
     
@@ -76,10 +78,11 @@ fn set_start_events(_window: &Window, document: &Document) -> Result<(), JsValue
     wifi_disconnect_action.forget();
     
     let volume_slider_action = Closure::wrap(Box::new(||{
-        live_volume_slider();
-    }) as Box<dyn FnMut()>);
-    let volume_slider_spam_action = Closure::wrap(Box::new(||{
         save_volume_slider();
+    }) as Box<dyn FnMut()>);
+
+    let volume_slider_spam_action = Closure::wrap(Box::new(||{
+        live_volume_slider();
     }) as Box<dyn FnMut()>);
     volume_slider.add_event_listener_with_callback("pointerup", volume_slider_action.as_ref().unchecked_ref())?;
     volume_slider.add_event_listener_with_callback("keyup", volume_slider_action.as_ref().unchecked_ref())?;

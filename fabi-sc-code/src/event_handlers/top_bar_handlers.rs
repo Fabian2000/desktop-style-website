@@ -190,7 +190,7 @@ pub fn save_volume_slider() {
             console::error_1(&JsValue::from_str("Unable to convert the slider to input."));
             return;
         };
-
+        
         let value = slider.value();
         let Ok(value_i32) = value.parse::<i32>() else {
             console::error_1(&JsValue::from_str("Unable to parse slider value string to int."));
@@ -202,19 +202,21 @@ pub fn save_volume_slider() {
                 console::error_1(&JsValue::from_str("Unable to open database."));
                 return;
             };
-
             db.register_listener_unique("top-bar-volume", |key, value| {
                 if key == "volume" {
                     update_volume_slider(value);
                 }
             });
 
-            _ = db.set_item("volume", &JsValue::from(value_i32));
+            let Ok(_) = db.set_item("volume", &JsValue::from(value_i32)).await else {
+                console::error_1(&JsValue::from_str("Unable to store volume in database."));
+                return;
+            };
         });
     }
 }
 
-fn update_volume_slider(value: Option<JsValue>) {
+fn update_volume_slider(value: Option<&JsValue>) {
 	let Some(window) = web_sys::window() else {
 		console::error_1(&JsValue::from_str("Unable to get window"));
 		return;
@@ -297,6 +299,7 @@ pub fn init_volume_slider() {
 
             if let Some(value) = value.as_f64() {
                 slider.set_value(&value.to_string());
+                live_volume_slider();
             }
         }
     });

@@ -17,5 +17,8 @@ web-sys = { version = "0.3.77", features = [
   "HtmlElement","HtmlInputElement","HtmlCanvasElement", "HtmlCollection","CanvasRenderingContext2d",
   "MouseEvent","KeyboardEvent","Performance","console", "DomTokenList",
   "IdbDatabase", "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction",
-  "IdbObjectStore", "IdbTransactionMode"
+  "IdbObjectStore", "IdbTransactionMode", "DomException"
 ] }
+
+[build-dependencies]
+chrono = "0.4.41"

@@ -404,6 +404,15 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                     return;
                 }
 
+                // Don't intercept if app-drawer is open (let drawer handle its own swipe-to-close)
+                let app_drawer_open = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(".app-drawer.open").ok().flatten())
+                    .is_some();
+                if app_drawer_open {
+                    return;
+                }
+
                 // Check if panel is open by looking at the DOM
                 // Panel has .open class when open and not dragging, or check if it's visible at all
                 let panel_is_open = web_sys::window()

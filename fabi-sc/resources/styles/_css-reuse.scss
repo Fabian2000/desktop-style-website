@@ -5,3 +5,32 @@
 .display-block {
     display: block;
 }
+
+// Custom scrollbar - system-wide
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba($color-text, 0.3) transparent;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: rgba($color-text, 0.2);
+        border-radius: $border-radius;
+        transition: background 0.2s ease;
+
+        &:hover {
+            background: rgba($color-text, 0.4);
+        }
+    }
+
+    &::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+}

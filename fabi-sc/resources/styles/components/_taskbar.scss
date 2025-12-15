@@ -1,0 +1,421 @@
+// Desktop: Floating dock at bottom center
+.taskbar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba($color-background-dark, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: $border-radius;
+    border: 1px solid rgba($color-text, 0.08);
+    z-index: 100;
+    user-select: none;
+
+    // Hide desktop taskbar on mobile
+    @media screen and (orientation: portrait) {
+        display: none;
+    }
+
+    .taskbar-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        border-radius: $border-radius;
+        background: transparent;
+        border: none;
+        color: $color-text;
+        cursor: pointer;
+        transition: transform 0.15s ease;
+
+        &:hover {
+            transform: translateY(-6px);
+        }
+
+        &:active {
+            transform: translateY(-3px) scale(0.95);
+        }
+
+        // Running app indicator (dot below)
+        &.active::after {
+            content: "";
+            position: absolute;
+            bottom: -4px;
+            width: 4px;
+            height: 4px;
+            background: $color-text;
+            border-radius: 50%;
+        }
+
+        .taskbar-icon {
+            font-size: 24px;
+        }
+
+        .taskbar-label {
+            display: none;
+        }
+    }
+
+    .taskbar-separator {
+        width: 1px;
+        height: 32px;
+        background: rgba($color-text, 0.15);
+        margin: 0 4px;
+    }
+
+    .start-btn {
+        padding: 0;
+        overflow: hidden;
+
+        .start-logo {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        &:hover {
+            transform: translateY(-6px);
+        }
+    }
+}
+
+// Desktop: Custom App Launcher
+.start-menu {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px) scale(0.95);
+    width: 480px;
+    background: rgba($color-background-dark, 0.85);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border-radius: $border-radius;
+    border: 1px solid rgba($color-text, 0.08);
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+    z-index: 99;
+    overflow: hidden;
+
+    @media screen and (orientation: portrait) {
+        display: none;
+    }
+
+    &.open {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+
+    // Header with user info
+    .start-menu-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 24px;
+        background: linear-gradient(135deg, rgba($color-primary, 0.15), rgba($color-primary, 0.05));
+        border-bottom: 1px solid rgba($color-text, 0.06);
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba($color-text, 0.2);
+        }
+
+        .user-details {
+            flex: 1;
+
+            .user-name {
+                font-size: 16px;
+                font-weight: 600;
+                color: $color-text;
+                margin-bottom: 2px;
+            }
+
+            .user-status {
+                font-size: 12px;
+                color: rgba($color-text, 0.5);
+            }
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+
+            button {
+                width: 36px;
+                height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: rgba($color-text, 0.08);
+                border: none;
+                border-radius: $border-radius;
+                color: rgba($color-text, 0.7);
+                cursor: pointer;
+                transition: all 0.15s ease;
+
+                &:hover {
+                    background: rgba($color-text, 0.15);
+                    color: $color-text;
+                }
+
+                i {
+                    font-size: 14px;
+                }
+            }
+        }
+    }
+
+    // Apps section
+    .start-menu-apps {
+        padding: 20px;
+        max-height: 320px;
+        overflow-y: auto;
+
+        .apps-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba($color-text, 0.4);
+            margin-bottom: 12px;
+        }
+    }
+
+    // App grid - 4 columns, compact
+    .start-menu-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+
+    .start-menu-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 8px;
+        background: transparent;
+        border: none;
+        border-radius: $border-radius;
+        color: $color-text;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.15s ease;
+
+        &:hover {
+            background: rgba($color-text, 0.08);
+            transform: translateY(-2px);
+
+            .app-icon-wrapper {
+                transform: scale(1.05);
+            }
+        }
+
+        &:active {
+            transform: translateY(0);
+        }
+
+        .app-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, rgba($color-text, 0.12), rgba($color-text, 0.06));
+            border-radius: $border-radius;
+            border: 1px solid rgba($color-text, 0.08);
+            transition: transform 0.15s ease;
+
+            i {
+                font-size: 22px;
+                color: $color-text;
+            }
+        }
+
+        span {
+            font-size: 12px;
+            color: rgba($color-text, 0.8);
+            max-width: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    // Quick actions footer
+    .start-menu-footer {
+        display: flex;
+        gap: 8px;
+        padding: 16px 20px;
+        background: rgba(0, 0, 0, 0.2);
+        border-top: 1px solid rgba($color-text, 0.06);
+
+        .quick-action {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: rgba($color-text, 0.06);
+            border: none;
+            border-radius: $border-radius;
+            color: rgba($color-text, 0.7);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+
+            &:hover {
+                background: rgba($color-text, 0.12);
+                color: $color-text;
+            }
+
+            &.power {
+                flex: 0;
+                padding: 12px 16px;
+
+                &:hover {
+                    background: rgba(255, 80, 80, 0.2);
+                    color: #ff6b6b;
+                }
+            }
+
+            i {
+                font-size: 14px;
+            }
+        }
+    }
+}
+
+// Mobile: Just floating icons at bottom (Android style - no visible dock)
+.mobile-dock {
+    display: none;
+
+    @media screen and (orientation: portrait) {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 16px 20px;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        z-index: 100;
+        user-select: none;
+    }
+
+    .dock-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 54px;
+        height: 54px;
+        border-radius: $border-radius;
+        background: rgba($color-background-medium, 0.5);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid rgba($color-text, 0.08);
+        color: $color-text;
+        font-size: 24px;
+        cursor: pointer;
+        transition: transform 0.15s ease;
+
+        &:active {
+            transform: scale(0.9);
+        }
+    }
+}
+
+// Mobile: App Drawer (slides up from bottom on swipe)
+.app-drawer {
+    display: none;
+
+    @media screen and (orientation: portrait) {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 30px; // Below top-bar - top-bar must always be visible
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba($color-background-medium, 0.6);
+        backdrop-filter: blur(50px);
+        -webkit-backdrop-filter: blur(50px);
+        z-index: 99; // Below top-bar z-index
+        transform: translateY(100%);
+        transition: transform 0.3s ease-out;
+        overscroll-behavior: contain; // Prevent browser pull-to-refresh
+        touch-action: none; // Handle all touch ourselves
+
+        &.open {
+            transform: translateY(0);
+        }
+
+        &.dragging {
+            transition: none;
+        }
+    }
+
+    .app-drawer-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px 16px;
+        padding: 50px 24px;
+        padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .app-icon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        background: none;
+        border: none;
+        color: $color-text;
+        cursor: pointer;
+        padding: 0;
+
+        &:active .app-icon-bg {
+            transform: scale(0.9);
+        }
+
+        .app-icon-bg {
+            width: 56px;
+            height: 56px;
+            border-radius: $border-radius;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            background: rgba($color-text, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba($color-text, 0.08);
+            transition: transform 0.15s ease;
+        }
+
+        .app-icon-label {
+            font-size: 11px;
+            color: rgba($color-text, 0.9);
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            max-width: 64px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+}

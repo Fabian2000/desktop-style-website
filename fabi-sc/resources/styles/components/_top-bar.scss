@@ -1,12 +1,20 @@
 .top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     height: 30px;
     width: 100%;
-    background-color: rgba(#111111, 0.7);
-    color: #ffffff;
+    background: rgba($color-background-dark, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba($color-text, 0.06);
+    color: $color-text;
     user-select: none;
+    z-index: 999985; // Above popups (999980), below boot/lock screens
 
     .time-btn {
         margin-right: 5px;
@@ -15,15 +23,16 @@
     .top-bar-btn {
         border-radius: $border-radius;
         border: none;
-        background-color: inherit;
-        color: #ffffff;
+        background-color: transparent;
+        color: $color-text;
+        transition: background-color 0.15s ease;
 
         &:hover {
-            background-color: #000000;
+            background-color: rgba($color-text, 0.1);
         }
 
         &:focus-visible {
-            outline: solid 2px #ffffff;
+            outline: solid 2px $color-text;
         }
 
         .spacer-right {
@@ -36,7 +45,7 @@
             cursor: default;
 
             &:hover {
-                background-color: inherit;
+                background-color: transparent;
             }
         }
     }
@@ -50,24 +59,31 @@
     display: flex;
     justify-content: end;
     user-select: none;
+    pointer-events: none; // Container doesn't block clicks
+    z-index: 999980; // Above almost everything, below boot/lock/offline screens (999998+)
 
     .wifi-speaker-popup {
         width: 300px;
         height: fit-content;
         margin-top: -400px;
         margin-right: 20px;
-        background-color: rgba($color-background-dark, 0.95);
+        background: rgba($color-background-dark, 0.7);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        border: 1px solid rgba($color-text, 0.08);
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
         border-radius: $border-radius;
         padding: 15px;
         color: $color-text;
         transition: margin-top .25s ease-in-out;
+        pointer-events: auto; // But popup content IS clickable
 
         @media screen and (orientation: portrait) {
             display: none;
         }
 
         &.open {
-            margin-top: 15px;
+            margin-top: 45px; // 30px top-bar + 15px spacing
         }
 
         p {
@@ -238,18 +254,23 @@
         height: fit-content;
         margin-top: -450px;
         margin-right: 5px;
-        background-color: rgba($color-background-dark, 0.95);
+        background: rgba($color-background-dark, 0.7);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        border: 1px solid rgba($color-text, 0.08);
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
         border-radius: $border-radius;
         padding: 15px;
         color: $color-text;
         transition: margin-top .25s ease-in-out;
+        pointer-events: auto; // Popup content IS clickable
 
         @media screen and (orientation: portrait) {
             display: none;
         }
 
         &.open {
-            margin-top: 15px;
+            margin-top: 45px; // 30px top-bar + 15px spacing
         }
 
         .calendar-time-display {
@@ -348,9 +369,9 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba($color-background-dark, 0.7);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        background: rgba($color-background-dark, 0.6);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
         color: $color-text;
         transform: translateY(-100%);
         transition: transform 0.3s ease-out;

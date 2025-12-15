@@ -350,6 +350,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     </div>
                 </div>
 
+                // Search bar
+                <div class="start-menu-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" placeholder="Search apps..." />
+                </div>
+
                 // Apps section
                 <div class="start-menu-apps">
                     <div class="apps-label">{"Applications"}</div>
@@ -427,6 +433,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 ontouchmove={on_drawer_touch_move}
                 ontouchend={on_drawer_touch_end}
             >
+                // Search bar
+                <div class="app-drawer-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" placeholder="Search apps..." />
+                </div>
+
                 <div class="app-drawer-grid">
                     { for all_apps.iter().map(|app| {
                         let app_id = app.id.to_string();

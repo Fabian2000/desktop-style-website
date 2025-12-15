@@ -1027,9 +1027,38 @@
 .start-menu .start-menu-header .header-actions button i {
   font-size: 14px;
 }
+.start-menu .start-menu-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 20px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.start-menu .start-menu-search i {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.start-menu .start-menu-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 14px;
+}
+.start-menu .start-menu-search input::-moz-placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.start-menu .start-menu-search input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
 .start-menu .start-menu-apps {
   padding: 20px;
-  max-height: 320px;
+  padding-top: 0;
+  max-height: 280px;
   overflow-y: auto;
 }
 .start-menu .start-menu-apps .apps-label {
@@ -1144,7 +1173,7 @@
     right: 0;
     padding: 16px 20px;
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    z-index: 100;
+    z-index: 98;
     -webkit-user-select: none;
        -moz-user-select: none;
             user-select: none;
@@ -1182,7 +1211,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(34, 34, 34, 0.6);
+    background: rgba(17, 17, 17, 0.85);
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
     z-index: 99;
@@ -1198,12 +1227,42 @@
     transition: none;
   }
 }
+.app-drawer .app-drawer-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px;
+  margin-bottom: 10px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.app-drawer .app-drawer-search i {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.app-drawer .app-drawer-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 16px;
+}
+.app-drawer .app-drawer-search input::-moz-placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.app-drawer .app-drawer-search input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
 .app-drawer .app-drawer-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 24px 16px;
-  padding: 50px 24px;
+  gap: 20px 12px;
+  padding: 10px 20px;
   padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
 }
 .app-drawer .app-icon {
   display: flex;
@@ -1214,30 +1273,27 @@
   border: none;
   color: #ffffff;
   cursor: pointer;
-  padding: 0;
+  padding: 8px 4px;
 }
 .app-drawer .app-icon:active .app-icon-bg {
   transform: scale(0.9);
 }
 .app-drawer .app-icon .app-icon-bg {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   border-radius: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 24px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.15s ease;
 }
 .app-drawer .app-icon .app-icon-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  max-width: 64px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 70px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

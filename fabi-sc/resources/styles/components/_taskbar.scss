@@ -178,10 +178,41 @@
         }
     }
 
+    // Search bar
+    .start-menu-search {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 16px 20px;
+        padding: 12px 16px;
+        background: rgba($color-text, 0.08);
+        border-radius: $border-radius;
+        border: 1px solid rgba($color-text, 0.06);
+
+        i {
+            font-size: 14px;
+            color: rgba($color-text, 0.5);
+        }
+
+        input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: $color-text;
+            font-size: 14px;
+
+            &::placeholder {
+                color: rgba($color-text, 0.4);
+            }
+        }
+    }
+
     // Apps section
     .start-menu-apps {
         padding: 20px;
-        max-height: 320px;
+        padding-top: 0;
+        max-height: 280px;
         overflow-y: auto;
 
         .apps-label {
@@ -314,7 +345,7 @@
         right: 0;
         padding: 16px 20px;
         padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-        z-index: 100;
+        z-index: 98; // Below app-drawer (z-index: 99)
         user-select: none;
     }
 
@@ -352,7 +383,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba($color-background-medium, 0.6);
+        background: rgba($color-background-dark, 0.85);
         backdrop-filter: blur(50px);
         -webkit-backdrop-filter: blur(50px);
         z-index: 99; // Below top-bar z-index
@@ -370,12 +401,44 @@
         }
     }
 
+    // Search bar
+    .app-drawer-search {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 20px;
+        margin-bottom: 10px;
+        padding: 14px 18px;
+        background: rgba($color-text, 0.1);
+        border-radius: $border-radius;
+        border: 1px solid rgba($color-text, 0.08);
+
+        i {
+            font-size: 16px;
+            color: rgba($color-text, 0.5);
+        }
+
+        input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: $color-text;
+            font-size: 16px;
+
+            &::placeholder {
+                color: rgba($color-text, 0.4);
+            }
+        }
+    }
+
     .app-drawer-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 24px 16px;
-        padding: 50px 24px;
+        gap: 20px 12px;
+        padding: 10px 20px;
         padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
     }
 
     .app-icon {
@@ -387,32 +450,29 @@
         border: none;
         color: $color-text;
         cursor: pointer;
-        padding: 0;
+        padding: 8px 4px;
 
         &:active .app-icon-bg {
             transform: scale(0.9);
         }
 
         .app-icon-bg {
-            width: 56px;
-            height: 56px;
+            width: 52px;
+            height: 52px;
             border-radius: $border-radius;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
-            background: rgba($color-text, 0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba($color-text, 0.08);
+            font-size: 24px;
+            background: rgba($color-text, 0.12);
+            border: 1px solid rgba($color-text, 0.1);
             transition: transform 0.15s ease;
         }
 
         .app-icon-label {
-            font-size: 11px;
-            color: rgba($color-text, 0.9);
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-            max-width: 64px;
+            font-size: 12px;
+            color: rgba($color-text, 0.85);
+            max-width: 70px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;

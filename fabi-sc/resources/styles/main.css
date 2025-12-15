@@ -289,75 +289,162 @@
 }
 .top-bar-popups .wifi-speaker-popup {
   width: 300px;
-  height: 200px;
-  margin-top: -250px;
+  height: -moz-fit-content;
+  height: fit-content;
+  margin-top: -400px;
   margin-right: 20px;
-  background-color: rgba(17, 17, 17, 0.7);
+  background-color: rgba(17, 17, 17, 0.95);
   border-radius: 30px;
-  padding: 10px;
+  padding: 15px;
   color: #ffffff;
   transition: margin-top 0.25s ease-in-out;
 }
 @media screen and (orientation: portrait) {
   .top-bar-popups .wifi-speaker-popup {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    margin-top: -500%;
+    display: none;
   }
 }
 .top-bar-popups .wifi-speaker-popup.open {
-  margin-top: 20px;
+  margin-top: 40px;
 }
-@media screen and (orientation: portrait) {
-  .top-bar-popups .wifi-speaker-popup.open {
-    margin-top: 0;
-  }
+.top-bar-popups .wifi-speaker-popup p {
+  margin: 0;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #aaaaaa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper {
-  width: 100%;
-  text-align: left;
-  background-color: #111111;
+.top-bar-popups .wifi-speaker-popup hr {
   border: none;
-  color: #ffffff;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 15px 0;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section {
+  position: relative;
+  background-color: rgba(34, 34, 34, 0.5);
   border-radius: 30px;
+  overflow: hidden;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-content {
+  padding: 12px 16px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: transform 0.2s ease-out;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper div {
-  margin-left: 10px;
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-content.shifted {
+  transform: translateX(-60px);
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn {
-  background-color: #ee5555;
-  color: #ffffff;
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-info .wifi-icon {
+  font-size: 18px;
+  color: #aaffaa;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-info .wifi-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-info .wifi-details .wifi-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .wifi-info .wifi-details .wifi-network {
+  font-size: 12px;
+  color: #aaaaaa;
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .menu-btn {
+  background-color: rgba(51, 51, 51, 0.5);
   border: none;
+  color: #ffffff;
+  padding: 8px 12px;
   border-radius: 30px;
-  padding: 8px;
-  margin-right: 10px;
+  cursor: pointer;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn.disconnect {
+.top-bar-popups .wifi-speaker-popup .wifi-section .menu-btn:hover {
+  background-color: rgba(51, 51, 51, 0.8);
+}
+.top-bar-popups .wifi-speaker-popup .wifi-section .disconnect-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 60px;
   background-color: #ee5555;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(100%);
+  transition: transform 0.2s ease-out;
+  border-top-left-radius: 30px;
+  border-bottom-left-radius: 30px;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn.disconnect:hover {
+.top-bar-popups .wifi-speaker-popup .wifi-section .disconnect-btn:hover {
   background-color: #ee3333;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn.disconnect i {
-  color: #ffaaaa;
+.top-bar-popups .wifi-speaker-popup .wifi-section .disconnect-btn.visible {
+  transform: translateX(0);
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn.menu {
-  background-color: #111111;
+.top-bar-popups .wifi-speaker-popup .wifi-section .disconnect-btn i {
+  font-size: 16px;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn.menu:hover {
-  background-color: #000000;
+.top-bar-popups .wifi-speaker-popup .slider-container {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  background: #333333;
+  border-radius: 30px;
+  overflow: hidden;
+  margin-top: 10px;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .right-btn.menu i {
-  color: #ffffff;
+.top-bar-popups .wifi-speaker-popup .slider-container .slider-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #5555ff;
+  border-radius: 30px;
+  transition: width 0.05s ease-out;
 }
-.top-bar-popups .wifi-speaker-popup .long-btn-wrapper .powered-on {
-  color: #aaffaa;
+.top-bar-popups .wifi-speaker-popup .slider-container .slider-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  pointer-events: none;
+  z-index: 2;
+}
+.top-bar-popups .wifi-speaker-popup .slider-container .slider-content i {
+  font-size: 16px;
+  margin-right: 10px;
+}
+.top-bar-popups .wifi-speaker-popup .slider-container .slider-content span {
+  font-size: 14px;
+  font-weight: 500;
+}
+.top-bar-popups .wifi-speaker-popup .slider-container input.slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 4;
+  margin: 0;
 }
 .top-bar-popups .calendar-popup {
   width: 300px;
@@ -365,7 +452,7 @@
   height: fit-content;
   margin-top: -450px;
   margin-right: 5px;
-  background-color: rgba(17, 17, 17, 0.9);
+  background-color: rgba(17, 17, 17, 0.95);
   border-radius: 30px;
   padding: 15px;
   color: #ffffff;
@@ -373,19 +460,11 @@
 }
 @media screen and (orientation: portrait) {
   .top-bar-popups .calendar-popup {
-    width: 100%;
-    margin: 0;
-    margin-top: -500%;
-    border-radius: 0;
+    display: none;
   }
 }
 .top-bar-popups .calendar-popup.open {
-  margin-top: 20px;
-}
-@media screen and (orientation: portrait) {
-  .top-bar-popups .calendar-popup.open {
-    margin-top: 0;
-  }
+  margin-top: 40px;
 }
 .top-bar-popups .calendar-popup .calendar-time-display {
   text-align: center;
@@ -403,7 +482,7 @@
 }
 .top-bar-popups .calendar-popup hr {
   border: none;
-  border-top: 1px solid #333333;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin: 15px 0;
 }
 .top-bar-popups .calendar-popup .calendar-header {
@@ -417,15 +496,15 @@
   font-weight: 500;
 }
 .top-bar-popups .calendar-popup .calendar-header .calendar-nav-btn {
-  background: none;
+  background: rgba(51, 51, 51, 0.5);
   border: none;
   color: #ffffff;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 30px;
   cursor: pointer;
 }
 .top-bar-popups .calendar-popup .calendar-header .calendar-nav-btn:hover {
-  background-color: #333333;
+  background-color: rgba(51, 51, 51, 0.8);
 }
 .top-bar-popups .calendar-popup .calendar-grid {
   display: grid;
@@ -435,7 +514,7 @@
 }
 .top-bar-popups .calendar-popup .calendar-grid .calendar-weekday {
   font-size: 11px;
-  color: #888888;
+  color: #aaaaaa;
   padding: 5px 0;
   font-weight: 500;
 }
@@ -450,7 +529,7 @@
   margin: auto;
 }
 .top-bar-popups .calendar-popup .calendar-grid .calendar-day.other-month {
-  color: #555555;
+  color: rgba(255, 255, 255, 0.3);
 }
 .top-bar-popups .calendar-popup .calendar-grid .calendar-day.today {
   background-color: #5555ff;

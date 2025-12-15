@@ -53,82 +53,182 @@
 
     .wifi-speaker-popup {
         width: 300px;
-        height: 200px;
-        margin-top: -250px;
+        height: fit-content;
+        margin-top: -400px;
         margin-right: 20px;
-        background-color: rgba(#111111, 0.7);
+        background-color: rgba($color-background-dark, 0.95);
         border-radius: $border-radius;
-        padding: 10px;
-        color: #ffffff;
+        padding: 15px;
+        color: $color-text;
         transition: margin-top .25s ease-in-out;
 
         @media screen and (orientation: portrait) {
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            margin-top: -500%;
+            display: none;
         }
 
         &.open {
-            margin-top: 20px;
+            margin-top: 40px;
+        }
 
-            @media screen and (orientation: portrait) {
-                margin-top: 0;
+        p {
+            margin: 0;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: $color-text-muted;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid rgba($color-text, 0.1);
+            margin: 15px 0;
+        }
+
+        .wifi-section {
+            position: relative;
+            background-color: rgba($color-background-medium, 0.5);
+            border-radius: $border-radius;
+            overflow: hidden;
+
+            .wifi-content {
+                padding: 12px 16px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                transition: transform 0.2s ease-out;
+
+                &.shifted {
+                    transform: translateX(-60px);
+                }
+            }
+
+            .wifi-info {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+
+                .wifi-icon {
+                    font-size: 18px;
+                    color: #aaffaa;
+                }
+
+                .wifi-details {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+
+                    .wifi-label {
+                        font-size: 14px;
+                        font-weight: 500;
+                    }
+
+                    .wifi-network {
+                        font-size: 12px;
+                        color: $color-text-muted;
+                    }
+                }
+            }
+
+            .menu-btn {
+                background-color: rgba($color-background-light, 0.5);
+                border: none;
+                color: $color-text;
+                padding: 8px 12px;
+                border-radius: $border-radius;
+                cursor: pointer;
+
+                &:hover {
+                    background-color: rgba($color-background-light, 0.8);
+                }
+            }
+
+            .disconnect-btn {
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                width: 60px;
+                background-color: #ee5555;
+                border: none;
+                color: $color-text;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transform: translateX(100%);
+                transition: transform 0.2s ease-out;
+                border-top-left-radius: $border-radius;
+                border-bottom-left-radius: $border-radius;
+
+                &:hover {
+                    background-color: #ee3333;
+                }
+
+                &.visible {
+                    transform: translateX(0);
+                }
+
+                i {
+                    font-size: 16px;
+                }
             }
         }
 
-        .long-btn-wrapper {
+        // Pill-style slider container (desktop popup)
+        .slider-container {
+            position: relative;
             width: 100%;
-            text-align: left;
-            background-color: #111111;
-            border: none;
-            color: #ffffff;
-            padding-top: 10px;
-            padding-bottom: 10px;
+            height: 40px;
+            background: $color-background-light;
             border-radius: $border-radius;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            overflow: hidden;
+            margin-top: 10px;
 
-            div {
-                margin-left: 10px;
-            }
-
-            .right-btn {
-                background-color: #ee5555;
-                color: #ffffff;
-                border: none;
+            .slider-fill {
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                background: $color-primary;
                 border-radius: $border-radius;
-                padding: 8px;
-                margin-right: 10px;
+                transition: width 0.05s ease-out;
+            }
 
-                &.disconnect {
-                    background-color: #ee5555;
+            .slider-content {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                padding: 0 15px;
+                pointer-events: none;
+                z-index: 2;
 
-                    &:hover {
-                        background-color: #ee3333;
-                    }
-
-                    i {
-                        color: #ffaaaa;
-                    }
+                i {
+                    font-size: 16px;
+                    margin-right: 10px;
                 }
 
-                &.menu {
-                    background-color: #111111;
-
-                    &:hover {
-                        background-color: #000000;
-                    }
-
-                    i {
-                        color: #ffffff;
-                    }
+                span {
+                    font-size: 14px;
+                    font-weight: 500;
                 }
             }
 
-            .powered-on {
-                color: #aaffaa;
+            input.slider {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                opacity: 0;
+                cursor: pointer;
+                z-index: 4;
+                margin: 0;
             }
         }
     }
@@ -138,25 +238,18 @@
         height: fit-content;
         margin-top: -450px;
         margin-right: 5px;
-        background-color: rgba(#111111, 0.9);
+        background-color: rgba($color-background-dark, 0.95);
         border-radius: $border-radius;
         padding: 15px;
-        color: #ffffff;
+        color: $color-text;
         transition: margin-top .25s ease-in-out;
 
         @media screen and (orientation: portrait) {
-            width: 100%;
-            margin: 0;
-            margin-top: -500%;
-            border-radius: 0;
+            display: none;
         }
 
         &.open {
-            margin-top: 20px;
-
-            @media screen and (orientation: portrait) {
-                margin-top: 0;
-            }
+            margin-top: 40px;
         }
 
         .calendar-time-display {
@@ -171,14 +264,14 @@
 
             .current-date {
                 font-size: 14px;
-                color: #aaaaaa;
+                color: $color-text-muted;
                 margin-top: 5px;
             }
         }
 
         hr {
             border: none;
-            border-top: 1px solid #333333;
+            border-top: 1px solid rgba($color-text, 0.1);
             margin: 15px 0;
         }
 
@@ -194,15 +287,15 @@
             }
 
             .calendar-nav-btn {
-                background: none;
+                background: rgba($color-background-light, 0.5);
                 border: none;
-                color: #ffffff;
+                color: $color-text;
                 padding: 8px 12px;
-                border-radius: 4px;
+                border-radius: $border-radius;
                 cursor: pointer;
 
                 &:hover {
-                    background-color: #333333;
+                    background-color: rgba($color-background-light, 0.8);
                 }
             }
         }
@@ -215,7 +308,7 @@
 
             .calendar-weekday {
                 font-size: 11px;
-                color: #888888;
+                color: $color-text-muted;
                 padding: 5px 0;
                 font-weight: 500;
             }
@@ -231,12 +324,12 @@
                 margin: auto;
 
                 &.other-month {
-                    color: #555555;
+                    color: rgba($color-text, 0.3);
                 }
 
                 &.today {
-                    background-color: #5555ff;
-                    color: #ffffff;
+                    background-color: $color-primary;
+                    color: $color-text;
                     font-weight: bold;
                 }
             }

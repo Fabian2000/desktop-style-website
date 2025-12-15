@@ -30,9 +30,11 @@ pub fn top_bar(props: &TopBarProps) -> Html {
     let popup_visible = use_state(|| false);
     let calendar_popup_open = use_state(|| false);
     let calendar_popup_visible = use_state(|| false);
-    let show_disconnect_btn = use_state(|| false);
     let volume = use_state(|| 0i32);
     let volume_display = use_state(|| String::from("0 %"));
+    let brightness = use_state(|| 100i32);
+    let brightness_display = use_state(|| String::from("100 %"));
+    let show_disconnect = use_state(|| false);
     let close_timeout = use_state(|| None::<Timeout>);
     let calendar_close_timeout = use_state(|| None::<Timeout>);
 
@@ -43,10 +45,12 @@ pub fn top_bar(props: &TopBarProps) -> Html {
     let panel_drag_offset = use_state(|| 0.0f32);
     let panel_close_timeout = use_state(|| None::<Timeout>);
 
-    // Initialize volume from IndexedDB on mount
+    // Initialize volume and brightness from IndexedDB on mount
     {
         let volume = volume.clone();
         let volume_display = volume_display.clone();
+        let brightness = brightness.clone();
+        let brightness_display = brightness_display.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
                 if let Ok(db) = IndexedDb::open("settings", "system_settings").await {
@@ -56,6 +60,16 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                                 let v = v as i32;
                                 volume.set(v);
                                 volume_display.set(format!("{} %", v));
+                            }
+                        }
+                    }
+                    if db.has_item("brightness").await {
+                        if let Ok(value) = db.get_item("brightness").await {
+                            if let Some(v) = value.as_f64() {
+                                let v = v as i32;
+                                brightness.set(v);
+                                brightness_display.set(format!("{} %", v));
+                                apply_brightness_overlay(v);
                             }
                         }
                     }
@@ -80,13 +94,11 @@ pub fn top_bar(props: &TopBarProps) -> Html {
         let popup_open = popup_open.clone();
         let popup_visible = popup_visible.clone();
         let close_timeout = close_timeout.clone();
-        let show_disconnect_btn = show_disconnect_btn.clone();
 
         Callback::from(move |_| {
             if *popup_open {
                 // Close popup
                 popup_open.set(false);
-                show_disconnect_btn.set(false);
 
                 let popup_visible = popup_visible.clone();
                 let timeout = Timeout::new(250, move || {
@@ -116,7 +128,6 @@ pub fn top_bar(props: &TopBarProps) -> Html {
         let popup_open = popup_open.clone();
         let popup_visible = popup_visible.clone();
         let close_timeout = close_timeout.clone();
-        let show_disconnect_btn = show_disconnect_btn.clone();
 
         Callback::from(move |e: MouseEvent| {
             if !*popup_open {
@@ -127,7 +138,7 @@ pub fn top_bar(props: &TopBarProps) -> Html {
             if let Some(target) = e.target() {
                 if let Some(element) = target.dyn_ref::<web_sys::Element>() {
                     // Check if it's the slider itself
-                    if element.id() == "volume-slider" {
+                    if element.id() == "volume-slider" || element.id() == "brightness-slider" {
                         return;
                     }
 
@@ -150,7 +161,6 @@ pub fn top_bar(props: &TopBarProps) -> Html {
 
             // Close popup
             popup_open.set(false);
-            show_disconnect_btn.set(false);
 
             let popup_visible = popup_visible.clone();
             let timeout = Timeout::new(250, move || {
@@ -184,10 +194,10 @@ pub fn top_bar(props: &TopBarProps) -> Html {
         });
     }
 
-    let on_wifi_menu_click = {
-        let show_disconnect_btn = show_disconnect_btn.clone();
+    let on_wifi_click = {
+        let show_disconnect = show_disconnect.clone();
         Callback::from(move |_| {
-            show_disconnect_btn.set(true);
+            show_disconnect.set(!*show_disconnect);
         })
     };
 
@@ -221,7 +231,38 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                         spawn_local(async move {
                             if let Ok(db) = IndexedDb::open("settings", "system_settings").await {
                                 let _ = db.set_item("volume", &JsValue::from(value)).await;
-                                web_sys::console::log_1(&format!("Saved volume: {}", value).into());
+                            }
+                        });
+                    }
+                }
+            }
+        })
+    };
+
+    let on_brightness_input = {
+        let brightness = brightness.clone();
+        let brightness_display = brightness_display.clone();
+        Callback::from(move |e: InputEvent| {
+            if let Some(target) = e.target() {
+                if let Some(input) = target.dyn_ref::<HtmlInputElement>() {
+                    if let Ok(value) = input.value().parse::<i32>() {
+                        brightness.set(value);
+                        brightness_display.set(format!("{} %", value));
+                        apply_brightness_overlay(value);
+                    }
+                }
+            }
+        })
+    };
+
+    let on_brightness_change = {
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target() {
+                if let Some(input) = target.dyn_ref::<HtmlInputElement>() {
+                    if let Ok(value) = input.value().parse::<i32>() {
+                        spawn_local(async move {
+                            if let Ok(db) = IndexedDb::open("settings", "system_settings").await {
+                                let _ = db.set_item("brightness", &JsValue::from(value)).await;
                             }
                         });
                     }
@@ -604,18 +645,6 @@ pub fn top_bar(props: &TopBarProps) -> Html {
         classes.join(" ")
     };
 
-    let wifi_menu_class = if *show_disconnect_btn {
-        "right-btn menu display-none"
-    } else {
-        "right-btn menu"
-    };
-
-    let wifi_disconnect_class = if *show_disconnect_btn {
-        "right-btn disconnect"
-    } else {
-        "right-btn disconnect display-none"
-    };
-
     html! {
         <>
             <div class="top-bar">
@@ -639,32 +668,62 @@ pub fn top_bar(props: &TopBarProps) -> Html {
             </div>
             <div class="top-bar-popups">
                 <div class={popup_class}>
-                    <p>{"Wifi connection"}</p>
-                    <div class="long-btn-wrapper">
-                        <div>
-                            <i class="fa-solid fa-wifi powered-on"></i>
-                            {" fabi-sc.de"}
+                    <p>{"Network"}</p>
+                    <div class="wifi-section">
+                        <div class={if *show_disconnect { "wifi-content shifted" } else { "wifi-content" }}>
+                            <div class="wifi-info">
+                                <i class="fa-solid fa-wifi wifi-icon"></i>
+                                <div class="wifi-details">
+                                    <span class="wifi-label">{"WLAN"}</span>
+                                    <span class="wifi-network">{"fabi-sc.de"}</span>
+                                </div>
+                            </div>
+                            <button class="menu-btn" onclick={on_wifi_click}>
+                                <i class="fa-solid fa-ellipsis"></i>
+                            </button>
                         </div>
-                        <button class={wifi_disconnect_class} id="wifi-disconnect" onclick={on_wifi_disconnect}>
+                        <button
+                            class={if *show_disconnect { "disconnect-btn visible" } else { "disconnect-btn" }}
+                            onclick={on_wifi_disconnect}
+                        >
                             <i class="fa-solid fa-link-slash"></i>
-                            {" Disconnect"}
-                        </button>
-                        <button class={wifi_menu_class} id="wifi-extended-menu" onclick={on_wifi_menu_click}>
-                            <i class="fa-solid fa-ellipsis"></i>
                         </button>
                     </div>
                     <hr />
-                    <p>{"Volume "}<span id="volume-display">{(*volume_display).clone()}</span></p>
-                    <input
-                        class="slider headphone"
-                        id="volume-slider"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={(*volume).to_string()}
-                        oninput={on_volume_input}
-                        onchange={on_volume_change}
-                    />
+                    <div class="slider-container">
+                        <div class="slider-fill" style={format!("width: {}%", *volume)}></div>
+                        <div class="slider-content">
+                            <i class="fa-solid fa-volume-high"></i>
+                            <span>{(*volume_display).clone()}</span>
+                        </div>
+                        <input
+                            class="slider"
+                            id="volume-slider"
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={(*volume).to_string()}
+                            oninput={on_volume_input}
+                            onchange={on_volume_change}
+                        />
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-fill" style={format!("width: {}%", *brightness)}></div>
+                        <div class="slider-content">
+                            <i class="fa-solid fa-sun"></i>
+                            <span>{(*brightness_display).clone()}</span>
+                        </div>
+                        <input
+                            class="slider"
+                            id="brightness-slider"
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={(*brightness).to_string()}
+                            oninput={on_brightness_input}
+                            onchange={on_brightness_change}
+                        />
+                    </div>
                 </div>
                 <CalendarPopup visible={*calendar_popup_visible} open={*calendar_popup_open} />
             </div>
@@ -676,5 +735,37 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                 on_disconnect={props.on_disconnect.clone()}
             />
         </>
+    }
+}
+
+fn apply_brightness_overlay(brightness: i32) {
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            let opacity = (100 - brightness) as f32 / 100.0 * 0.7;
+
+            let overlay = match document.get_element_by_id("brightness-overlay") {
+                Some(el) => el,
+                None => {
+                    if let Ok(el) = document.create_element("div") {
+                        el.set_id("brightness-overlay");
+                        let base_style = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; \
+                            background-color: black; pointer-events: none; z-index: 2147483647; \
+                            transition: opacity 0.1s ease-out;";
+                        let _ = el.set_attribute("style", &format!("{} opacity: {};", base_style, opacity));
+                        if let Some(body) = document.body() {
+                            let _ = body.append_child(&el);
+                        }
+                        return;
+                    } else {
+                        return;
+                    }
+                }
+            };
+
+            let base_style = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; \
+                background-color: black; pointer-events: none; z-index: 2147483647; \
+                transition: opacity 0.1s ease-out;";
+            let _ = overlay.set_attribute("style", &format!("{} opacity: {};", base_style, opacity));
+        }
     }
 }

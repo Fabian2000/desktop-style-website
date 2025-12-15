@@ -2,6 +2,9 @@
 use std::{env, ffi::OsStr, fs, path::{Path, PathBuf}, process::Command};
 
 fn main() {
+    // Rebuild when WASM source changes
+    println!("cargo:rerun-if-changed=../fabi-sc-code/src");
+
     // Build the WASM crate
     let wasm_proj = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")

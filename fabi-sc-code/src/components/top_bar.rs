@@ -1,3 +1,4 @@
+use super::calendar_popup::CalendarPopup;
 use crate::database::IndexedDb;
 use crate::utils::get_local_time_no_sec;
 use gloo_timers::callback::{Interval, Timeout};
@@ -17,10 +18,13 @@ pub fn top_bar(props: &TopBarProps) -> Html {
     let current_time = use_state(|| get_local_time_no_sec());
     let popup_open = use_state(|| false);
     let popup_visible = use_state(|| false);
+    let calendar_popup_open = use_state(|| false);
+    let calendar_popup_visible = use_state(|| false);
     let show_disconnect_btn = use_state(|| false);
     let volume = use_state(|| 0i32);
     let volume_display = use_state(|| String::from("0 %"));
     let close_timeout = use_state(|| None::<Timeout>);
+    let calendar_close_timeout = use_state(|| None::<Timeout>);
 
     // Initialize volume from IndexedDB on mount
     {
@@ -209,6 +213,98 @@ pub fn top_bar(props: &TopBarProps) -> Html {
         })
     };
 
+    let toggle_calendar_popup = {
+        let calendar_popup_open = calendar_popup_open.clone();
+        let calendar_popup_visible = calendar_popup_visible.clone();
+        let calendar_close_timeout = calendar_close_timeout.clone();
+
+        Callback::from(move |_| {
+            if *calendar_popup_open {
+                // Close popup
+                calendar_popup_open.set(false);
+
+                let calendar_popup_visible = calendar_popup_visible.clone();
+                let timeout = Timeout::new(250, move || {
+                    calendar_popup_visible.set(false);
+                });
+                calendar_close_timeout.set(Some(timeout));
+            } else {
+                // Open popup - cancel any pending close timeout
+                calendar_close_timeout.set(None);
+
+                calendar_popup_visible.set(true);
+
+                let calendar_popup_open = calendar_popup_open.clone();
+                if let Some(window) = web_sys::window() {
+                    let closure = Closure::once(Box::new(move || {
+                        calendar_popup_open.set(true);
+                    }) as Box<dyn FnOnce()>);
+                    let _ = window.request_animation_frame(closure.as_ref().unchecked_ref());
+                    closure.forget();
+                }
+            }
+        })
+    };
+
+    // Global mousedown listener for calendar popup
+    {
+        let calendar_popup_open = calendar_popup_open.clone();
+        let calendar_popup_visible = calendar_popup_visible.clone();
+        let calendar_close_timeout = calendar_close_timeout.clone();
+
+        use_effect_with((*calendar_popup_open,), move |_| {
+            let calendar_popup_open = calendar_popup_open.clone();
+            let calendar_popup_visible = calendar_popup_visible.clone();
+            let calendar_close_timeout = calendar_close_timeout.clone();
+
+            let document = web_sys::window().and_then(|w| w.document());
+            let closure = Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                if !*calendar_popup_open {
+                    return;
+                }
+
+                if let Some(target) = e.target() {
+                    if let Some(element) = target.dyn_ref::<web_sys::Element>() {
+                        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+                            // Check if clicked inside calendar popup
+                            if let Ok(Some(popup)) = document.query_selector(".calendar-popup") {
+                                if popup.contains(Some(element)) {
+                                    return;
+                                }
+                            }
+                            // Check if clicked on time button
+                            if let Ok(Some(btn)) = document.query_selector("#top-bar-time") {
+                                if btn.contains(Some(element)) {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Close popup
+                calendar_popup_open.set(false);
+
+                let calendar_popup_visible = calendar_popup_visible.clone();
+                let timeout = Timeout::new(250, move || {
+                    calendar_popup_visible.set(false);
+                });
+                calendar_close_timeout.set(Some(timeout));
+            }) as Box<dyn FnMut(_)>);
+
+            if let Some(doc) = &document {
+                let _ = doc.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref());
+            }
+
+            let document_for_cleanup = document.clone();
+            move || {
+                if let Some(doc) = document_for_cleanup {
+                    let _ = doc.remove_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref());
+                }
+            }
+        });
+    }
+
     if !props.visible {
         return html! {};
     }
@@ -252,7 +348,7 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                         <i class="fa-solid fa-volume-high spacer-right"></i>
                         <i class="fa-solid fa-wifi"></i>
                     </button>
-                    <button class="time-btn top-bar-btn" id="top-bar-time">
+                    <button class="time-btn top-bar-btn" id="top-bar-time" onclick={toggle_calendar_popup}>
                         {(*current_time).clone()}
                     </button>
                 </div>
@@ -286,6 +382,7 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                         onchange={on_volume_change}
                     />
                 </div>
+                <CalendarPopup visible={*calendar_popup_visible} open={*calendar_popup_open} />
             </div>
         </>
     }

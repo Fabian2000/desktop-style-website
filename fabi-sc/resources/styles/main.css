@@ -350,6 +350,104 @@
 .top-bar-popups .wifi-speaker-popup .long-btn-wrapper .powered-on {
   color: #aaffaa;
 }
+.top-bar-popups .calendar-popup {
+  width: 300px;
+  height: -moz-fit-content;
+  height: fit-content;
+  margin-top: -450px;
+  margin-right: 5px;
+  background-color: rgba(17, 17, 17, 0.9);
+  border-radius: 8px;
+  padding: 15px;
+  color: #ffffff;
+  transition: margin-top 0.25s ease-in-out;
+}
+@media screen and (orientation: portrait) {
+  .top-bar-popups .calendar-popup {
+    width: 100%;
+    margin: 0;
+    margin-top: -500%;
+    border-radius: 0;
+  }
+}
+.top-bar-popups .calendar-popup.open {
+  margin-top: 20px;
+}
+@media screen and (orientation: portrait) {
+  .top-bar-popups .calendar-popup.open {
+    margin-top: 0;
+  }
+}
+.top-bar-popups .calendar-popup .calendar-time-display {
+  text-align: center;
+  margin-bottom: 10px;
+}
+.top-bar-popups .calendar-popup .calendar-time-display .large-time {
+  font-size: 42px;
+  font-weight: 300;
+  letter-spacing: 2px;
+}
+.top-bar-popups .calendar-popup .calendar-time-display .current-date {
+  font-size: 14px;
+  color: #aaaaaa;
+  margin-top: 5px;
+}
+.top-bar-popups .calendar-popup hr {
+  border: none;
+  border-top: 1px solid #333333;
+  margin: 15px 0;
+}
+.top-bar-popups .calendar-popup .calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.top-bar-popups .calendar-popup .calendar-header .calendar-month-year {
+  font-size: 16px;
+  font-weight: 500;
+}
+.top-bar-popups .calendar-popup .calendar-header .calendar-nav-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.top-bar-popups .calendar-popup .calendar-header .calendar-nav-btn:hover {
+  background-color: #333333;
+}
+.top-bar-popups .calendar-popup .calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.top-bar-popups .calendar-popup .calendar-grid .calendar-weekday {
+  font-size: 11px;
+  color: #888888;
+  padding: 5px 0;
+  font-weight: 500;
+}
+.top-bar-popups .calendar-popup .calendar-grid .calendar-day {
+  font-size: 13px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+}
+.top-bar-popups .calendar-popup .calendar-grid .calendar-day.other-month {
+  color: #555555;
+}
+.top-bar-popups .calendar-popup .calendar-grid .calendar-day.today {
+  background-color: #5555ff;
+  color: #ffffff;
+  font-weight: bold;
+}
 
 .display-none {
   display: none;

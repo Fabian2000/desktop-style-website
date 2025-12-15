@@ -102,7 +102,7 @@ pub fn app() -> Html {
             <Workspace visible={show_desktop && !is_offline && !is_booting} />
             <Taskbar visible={show_desktop && !is_offline && !is_booting} />
             <OfflineScreen visible={is_offline} />
-            <LockScreen visible={show_lock_screen || is_booting} on_login={on_login} />
+            <LockScreen visible={show_lock_screen || is_booting} boot_complete={!is_booting} on_login={on_login} />
         </>
     }
 }

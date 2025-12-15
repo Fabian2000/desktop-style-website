@@ -1,2 +1,3 @@
-pub mod indexed_db;
-mod request_to_future;
+mod indexed_db;
+
+pub use indexed_db::IndexedDb;

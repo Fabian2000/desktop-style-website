@@ -1,0 +1,75 @@
+.lock-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    background-image: url("../img/bg.webp");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 1000ms ease, transform 1000ms ease;
+    z-index: 999998;
+    user-select: none;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: -25px;
+        background: inherit;
+        filter: blur(20px);
+        z-index: -1;
+    }
+
+    &.fade-out {
+        opacity: 0;
+        transform: scale(1.1);
+    }
+
+    .profile-section {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+
+        .profile-picture {
+            width: 150px;
+            height: 150px;
+            background-image: url("../img/logo_inverted_bg.webp");
+            background-size: cover;
+            background-repeat: no-repeat;
+            border-radius: 100%;
+            border: solid 3px #ffffff;
+        }
+    }
+
+    .welcome-msg {
+        width: 100%;
+        color: #ffffff;
+        text-align: center;
+        font-size: 14pt;
+    }
+
+    .login-section {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+
+        .login-btn {
+            padding: 10px;
+            padding-left: 20px;
+            padding-right: 20px;
+            color: #ffffff;
+            border-radius: $border-radius;
+            background-color: #5555ff;
+            border: solid 2px #ffffff;
+            outline: none;
+
+            &:focus-visible {
+                outline: solid 2px #ffffff;
+            }
+        }
+    }
+}

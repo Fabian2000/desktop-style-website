@@ -1,40 +1,23 @@
-use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::*;
 use js_sys::*;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::*;
 
-// Benötigte Cargo.toml Features:
-// [dependencies]
-// wasm-bindgen = "0.2"
-// wasm-bindgen-futures = "0.4" 
-// web-sys = { version = "0.3", features = [
-//     "Window",
-//     "IdbFactory", 
-//     "IdbDatabase",
-//     "IdbOpenDbRequest", 
-//     "IdbRequest",
-//     "IdbObjectStore",
-//     "IdbTransaction", 
-//     "IdbTransactionMode",
-//     "Event",
-//     "EventTarget",
-//     "DomException"  # <-- Für .error() support
-// ]}
-// js-sys = "0.3"
-
-// Event system types - Updated to use JsValue
 type EventCallback = Box<dyn Fn(&str, Option<&JsValue>) + Send + Sync>;
-static EVENT_LISTENERS: LazyLock<Mutex<HashMap<String, EventCallback>>> = 
+static EVENT_LISTENERS: LazyLock<Mutex<HashMap<String, EventCallback>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Debug)]
 pub enum IndexedDbError {
     JsError(String),
     DatabaseNotFound,
+    #[allow(dead_code)]
     TransactionFailed,
+    #[allow(dead_code)]
     InvalidOperation,
+    #[allow(dead_code)]
     SerializationError,
     ItemNotFound,
 }
@@ -64,6 +47,7 @@ impl IndexedDb {
             store_name: store.to_string(),
             db: None,
         };
+
         let window = match web_sys::window() {
             Some(w) => w,
             None => return Err(IndexedDbError::JsError("No window object".to_string())),
@@ -71,7 +55,11 @@ impl IndexedDb {
 
         let idb = match window.indexed_db() {
             Ok(Some(idb)) => idb,
-            Ok(None) => return Err(IndexedDbError::JsError("IndexedDB not supported".to_string())),
+            Ok(None) => {
+                return Err(IndexedDbError::JsError(
+                    "IndexedDB not supported".to_string(),
+                ))
+            }
             Err(e) => return Err(IndexedDbError::from(e)),
         };
 
@@ -80,7 +68,6 @@ impl IndexedDb {
             Err(e) => return Err(IndexedDbError::from(e)),
         };
 
-        // Setup onupgradeneeded callback
         let store_name_clone = store.to_string();
         let onupgradeneeded_closure = Closure::wrap(Box::new(move |event: Event| {
             if let Some(target) = event.target() {
@@ -97,20 +84,22 @@ impl IndexedDb {
         open_request.set_onupgradeneeded(Some(onupgradeneeded_closure.as_ref().unchecked_ref()));
         onupgradeneeded_closure.forget();
 
-        // Convert the request to a promise manually
         let promise = js_sys::Promise::new(&mut |resolve, reject| {
             let resolve_clone = resolve.clone();
             let reject_clone = reject.clone();
-            
+
             let success_closure = Closure::wrap(Box::new(move |event: Event| {
                 if let Some(target) = event.target() {
                     if let Ok(request) = target.dyn_into::<IdbOpenDbRequest>() {
                         match request.result() {
                             Ok(result) => {
                                 let _ = resolve_clone.call1(&JsValue::UNDEFINED, &result);
-                            },
+                            }
                             Err(_) => {
-                                let _ = reject_clone.call1(&JsValue::UNDEFINED, &JsValue::from_str("Failed to get result"));
+                                let _ = reject_clone.call1(
+                                    &JsValue::UNDEFINED,
+                                    &JsValue::from_str("Failed to get result"),
+                                );
                             }
                         }
                     }
@@ -148,7 +137,11 @@ impl IndexedDb {
 
         db.db = Some(match result.dyn_into::<IdbDatabase>() {
             Ok(database) => database,
-            Err(_) => return Err(IndexedDbError::JsError("Failed to cast to IdbDatabase".to_string())),
+            Err(_) => {
+                return Err(IndexedDbError::JsError(
+                    "Failed to cast to IdbDatabase".to_string(),
+                ))
+            }
         });
 
         Ok(db)
@@ -160,10 +153,11 @@ impl IndexedDb {
             None => return Err(IndexedDbError::DatabaseNotFound),
         };
 
-        let transaction = match db.transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readonly) {
-            Ok(t) => t,
-            Err(e) => return Err(IndexedDbError::from(e)),
-        };
+        let transaction =
+            match db.transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readonly) {
+                Ok(t) => t,
+                Err(e) => return Err(IndexedDbError::from(e)),
+            };
 
         let store = match transaction.object_store(&self.store_name) {
             Ok(s) => s,
@@ -194,7 +188,9 @@ impl IndexedDb {
             None => return Err(IndexedDbError::DatabaseNotFound),
         };
 
-        let transaction = match db.transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readwrite) {
+        let transaction = match db
+            .transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readwrite)
+        {
             Ok(t) => t,
             Err(e) => return Err(IndexedDbError::from(e)),
         };
@@ -214,7 +210,7 @@ impl IndexedDb {
             Ok(_) => {
                 Self::emit_event(key, Some(value));
                 Ok(())
-            },
+            }
             Err(e) => Err(IndexedDbError::from(e)),
         }
     }
@@ -223,7 +219,7 @@ impl IndexedDb {
         match self.get_item(key).await {
             Ok(_) => true,
             Err(IndexedDbError::ItemNotFound) => false,
-            Err(_) => false, // Other errors also count as "not found" for has_item
+            Err(_) => false,
         }
     }
 
@@ -233,7 +229,9 @@ impl IndexedDb {
             None => return Err(IndexedDbError::DatabaseNotFound),
         };
 
-        let transaction = match db.transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readwrite) {
+        let transaction = match db
+            .transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readwrite)
+        {
             Ok(t) => t,
             Err(e) => return Err(IndexedDbError::from(e)),
         };
@@ -253,26 +251,26 @@ impl IndexedDb {
             Ok(_) => {
                 Self::emit_event(key, None);
                 Ok(())
-            },
+            }
             Err(e) => Err(IndexedDbError::from(e)),
         }
     }
 
-    // Helper method to convert IdbRequest to Promise - now static since open is static
     fn request_to_promise(request: IdbRequest) -> js_sys::Promise {
         js_sys::Promise::new(&mut |resolve, reject| {
             let resolve_clone = resolve.clone();
             let reject_clone = reject.clone();
-            
+
             let success_closure = Closure::wrap(Box::new(move |event: Event| {
                 if let Some(target) = event.target() {
                     if let Ok(req) = target.dyn_into::<IdbRequest>() {
                         match req.result() {
                             Ok(result) => {
                                 let _ = resolve_clone.call1(&JsValue::UNDEFINED, &result);
-                            },
+                            }
                             Err(_) => {
-                                let _ = resolve_clone.call1(&JsValue::UNDEFINED, &JsValue::UNDEFINED);
+                                let _ =
+                                    resolve_clone.call1(&JsValue::UNDEFINED, &JsValue::UNDEFINED);
                             }
                         }
                     }
@@ -304,20 +302,20 @@ impl IndexedDb {
         })
     }
 
-    pub fn register_listener_unique<F>(&self, id: &str, callback: F) -> bool 
-    where 
+    pub fn register_listener_unique<F>(&self, id: &str, callback: F) -> bool
+    where
         F: Fn(&str, Option<&JsValue>) + Send + Sync + 'static,
     {
         match EVENT_LISTENERS.lock() {
             Ok(mut listeners) => {
                 if listeners.contains_key(id) {
-                    false // Event listener already exists
+                    false
                 } else {
                     listeners.insert(id.to_string(), Box::new(callback));
-                    true // Event listener registered successfully
+                    true
                 }
-            },
-            Err(_) => false, // Mutex poisoned, but we don't panic
+            }
+            Err(_) => false,
         }
     }
 
@@ -327,6 +325,5 @@ impl IndexedDb {
                 callback(key, value);
             }
         }
-        // If mutex is poisoned, we silently continue - no panics
     }
 }

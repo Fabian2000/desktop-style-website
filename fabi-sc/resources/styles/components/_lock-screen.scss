@@ -5,6 +5,7 @@
     justify-content: center;
     align-items: center;
     flex-direction: column;
+    gap: 30px;
     background-image: url("../img/bg.webp");
     background-position: center;
     background-repeat: no-repeat;
@@ -14,6 +15,12 @@
     transition: opacity 1000ms ease, transform 1000ms ease;
     z-index: 999998;
     user-select: none;
+    cursor: pointer;
+
+    // Disable transition during swipe
+    &.swiping {
+        transition: none;
+    }
 
     &::before {
         content: "";
@@ -29,47 +36,204 @@
         transform: scale(1.1);
     }
 
+    // Mobile: different layout - time at top, swipe hint at bottom
+    @media screen and (orientation: portrait) {
+        justify-content: flex-start;
+        padding-top: 80px;
+    }
+
+    // Large time display
+    .lock-screen-time {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: $color-text;
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+        animation: fadeInDown 0.8s ease-out;
+
+        .time {
+            font-size: 96px;
+            font-weight: 200;
+            letter-spacing: 4px;
+            line-height: 1;
+
+            @media screen and (orientation: portrait) {
+                font-size: 80px;
+            }
+        }
+
+        .date {
+            font-size: 20px;
+            font-weight: 400;
+            color: rgba($color-text, 0.8);
+            margin-top: 8px;
+
+            @media screen and (orientation: portrait) {
+                font-size: 18px;
+            }
+        }
+    }
+
+    // Glassmorphism card - Desktop only
+    .lock-screen-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 60px;
+        background: rgba($color-background-dark, 0.4);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: $border-radius;
+        border: 1px solid rgba($color-text, 0.1);
+        animation: fadeInUp 0.8s ease-out 0.2s both;
+
+        // Mobile: no card styling, transparent
+        @media screen and (orientation: portrait) {
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border: none;
+            padding: 20px;
+            flex: 1;
+            justify-content: space-between;
+        }
+    }
+
     .profile-section {
-        width: 100%;
         display: flex;
         justify-content: center;
+        margin-bottom: 15px;
 
         .profile-picture {
-            width: 150px;
-            height: 150px;
+            width: 120px;
+            height: 120px;
             background-image: url("../img/logo_inverted_bg.webp");
             background-size: cover;
             background-repeat: no-repeat;
             border-radius: 100%;
-            border: solid 3px #ffffff;
+            border: solid 3px rgba($color-text, 0.8);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+
+            // Mobile: smaller profile picture
+            @media screen and (orientation: portrait) {
+                width: 80px;
+                height: 80px;
+                border-width: 2px;
+            }
         }
     }
 
     .welcome-msg {
-        width: 100%;
-        color: #ffffff;
+        color: $color-text;
         text-align: center;
-        font-size: 14pt;
+        margin-bottom: 20px;
+
+        p {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        @media screen and (orientation: portrait) {
+            margin-bottom: 0;
+
+            p {
+                font-size: 16px;
+            }
+        }
     }
 
+    // Desktop: decorative button (click anywhere works)
     .login-section {
-        width: 100%;
         display: flex;
         justify-content: center;
 
         .login-btn {
-            padding: 10px;
-            padding-left: 20px;
-            padding-right: 20px;
-            color: #ffffff;
+            padding: 12px 40px;
+            color: $color-text;
+            font-size: 16px;
+            font-weight: 500;
             border-radius: $border-radius;
-            background-color: #5555ff;
-            border: solid 2px #ffffff;
+            background-color: $color-primary;
+            border: none;
             outline: none;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 15px rgba($color-primary, 0.4);
 
-            &:focus-visible {
-                outline: solid 2px #ffffff;
+            &:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba($color-primary, 0.5);
+            }
+
+            &:active {
+                transform: translateY(0);
             }
         }
+    }
+
+    // Mobile: swipe hint at bottom
+    .unlock-hint {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: $color-text;
+        animation: pulseHint 2s ease-in-out infinite;
+        padding-bottom: 40px;
+
+        i {
+            font-size: 28px;
+            color: $color-text;
+            animation: bounceUp 1.5s ease-in-out infinite;
+        }
+
+        span {
+            font-size: 14px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            color: rgba($color-text, 0.7);
+        }
+    }
+}
+
+@keyframes pulseHint {
+    0%, 100% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes bounceUp {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+// Animations
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

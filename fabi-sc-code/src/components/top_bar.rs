@@ -105,6 +105,11 @@ pub fn top_bar(props: &TopBarProps) -> Html {
             // Check if click is inside popup or the toggle button
             if let Some(target) = e.target() {
                 if let Some(element) = target.dyn_ref::<web_sys::Element>() {
+                    // Check if it's the slider itself
+                    if element.id() == "volume-slider" {
+                        return;
+                    }
+
                     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
                         // Check if clicked inside popup
                         if let Ok(Some(popup)) = document.query_selector(".wifi-speaker-popup") {
@@ -173,28 +178,29 @@ pub fn top_bar(props: &TopBarProps) -> Html {
     };
 
     let on_volume_input = {
+        let volume = volume.clone();
         let volume_display = volume_display.clone();
         Callback::from(move |e: InputEvent| {
             if let Some(target) = e.target() {
                 if let Some(input) = target.dyn_ref::<HtmlInputElement>() {
-                    let value = input.value();
-                    volume_display.set(format!("{} %", value));
+                    if let Ok(value) = input.value().parse::<i32>() {
+                        volume.set(value);
+                        volume_display.set(format!("{} %", value));
+                    }
                 }
             }
         })
     };
 
     let on_volume_change = {
-        let volume = volume.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target() {
                 if let Some(input) = target.dyn_ref::<HtmlInputElement>() {
                     if let Ok(value) = input.value().parse::<i32>() {
-                        volume.set(value);
-
                         spawn_local(async move {
                             if let Ok(db) = IndexedDb::open("settings", "system_settings").await {
                                 let _ = db.set_item("volume", &JsValue::from(value)).await;
+                                web_sys::console::log_1(&format!("Saved volume: {}", value).into());
                             }
                         });
                     }

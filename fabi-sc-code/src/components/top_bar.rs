@@ -1,11 +1,21 @@
 use super::calendar_popup::CalendarPopup;
+use super::notification_panel::NotificationPanel;
 use crate::database::IndexedDb;
 use crate::utils::get_local_time_no_sec;
 use gloo_timers::callback::{Interval, Timeout};
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
+
+fn is_portrait() -> bool {
+    web_sys::window()
+        .and_then(|w| w.match_media("(orientation: portrait)").ok().flatten())
+        .map(|m| m.matches())
+        .unwrap_or(false)
+}
 
 #[derive(Properties, PartialEq)]
 pub struct TopBarProps {
@@ -25,6 +35,13 @@ pub fn top_bar(props: &TopBarProps) -> Html {
     let volume_display = use_state(|| String::from("0 %"));
     let close_timeout = use_state(|| None::<Timeout>);
     let calendar_close_timeout = use_state(|| None::<Timeout>);
+
+    // Mobile notification panel state
+    let panel_open = use_state(|| false);
+    let panel_visible = use_state(|| false);
+    let panel_dragging = use_state(|| false);
+    let panel_drag_offset = use_state(|| 0.0f32);
+    let panel_close_timeout = use_state(|| None::<Timeout>);
 
     // Initialize volume from IndexedDB on mount
     {
@@ -305,6 +322,273 @@ pub fn top_bar(props: &TopBarProps) -> Html {
         });
     }
 
+    // Touch event handlers for mobile notification panel
+    // Use a single shared state struct for all touch handlers
+    {
+        let panel_open = panel_open.clone();
+        let panel_visible = panel_visible.clone();
+        let panel_dragging = panel_dragging.clone();
+        let panel_drag_offset = panel_drag_offset.clone();
+        let panel_close_timeout = panel_close_timeout.clone();
+
+        use_effect_with((), move |_| {
+            let panel_open = panel_open.clone();
+            let panel_visible = panel_visible.clone();
+            let panel_dragging = panel_dragging.clone();
+            let panel_drag_offset = panel_drag_offset.clone();
+            let panel_close_timeout = panel_close_timeout.clone();
+
+            // Single shared state for all handlers
+            #[derive(Default)]
+            struct TouchState {
+                start_y: f32,
+                is_active: bool,
+                is_dragging: bool,
+                was_panel_open: bool,
+                offset: f32,
+                on_interactive: bool,
+            }
+            let state = Rc::new(RefCell::new(TouchState::default()));
+
+            let document = web_sys::window().and_then(|w| w.document());
+
+            // Touchstart handler
+            let state_start = state.clone();
+            let panel_visible_start = panel_visible.clone();
+            let panel_dragging_start = panel_dragging.clone();
+            let panel_open_start = panel_open.clone();
+
+            let touchstart_closure = Closure::wrap(Box::new(move |e: web_sys::TouchEvent| {
+                if !is_portrait() {
+                    return;
+                }
+
+                // Check if panel is open by looking at the DOM
+                // Panel has .open class when open and not dragging, or check if it's visible at all
+                let panel_is_open = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| {
+                        // Check for .open class first
+                        if d.query_selector(".notification-panel.open").ok().flatten().is_some() {
+                            return Some(true);
+                        }
+                        // Also check if panel exists and has transform: translateY(0) (meaning it's open)
+                        if let Some(panel) = d.query_selector(".notification-panel").ok().flatten() {
+                            if let Some(style) = panel.get_attribute("style") {
+                                if style.contains("translateY(0") || style.contains("translateY(-") && !style.contains("translateY(-100%)") {
+                                    return Some(true);
+                                }
+                            }
+                        }
+                        Some(false)
+                    })
+                    .unwrap_or(false);
+
+                let mut is_on_interactive = false;
+
+                // Check if touch is on interactive elements (sliders, buttons) - don't intercept those
+                if let Some(target) = e.target() {
+                    if let Some(element) = target.dyn_ref::<web_sys::Element>() {
+                        // Check for slider or button elements directly
+                        let tag = element.tag_name().to_lowercase();
+                        if tag == "input" || tag == "button" {
+                            is_on_interactive = true;
+                        }
+                        // Check if inside a button (for child elements like <i>, <span>, <div>)
+                        if element.closest("button").ok().flatten().is_some() {
+                            is_on_interactive = true;
+                        }
+                        // Check if inside input
+                        if element.closest("input").ok().flatten().is_some() {
+                            is_on_interactive = true;
+                        }
+                        // Check if inside slider container
+                        if element.closest(".slider-container").ok().flatten().is_some() {
+                            is_on_interactive = true;
+                        }
+                    }
+                }
+
+                if let Some(touch) = e.touches().get(0) {
+                    let y = touch.client_y() as f32;
+
+                    let mut s = state_start.borrow_mut();
+                    s.start_y = y;
+                    s.is_active = true;
+                    s.was_panel_open = panel_is_open;
+                    s.offset = 0.0;
+                    s.on_interactive = is_on_interactive;
+
+                    // If touching interactive element, let the element handle the touch
+                    if is_on_interactive {
+                        return;
+                    }
+
+                    // Start drag if: touching near top OR panel is already open
+                    if y < 60.0 || panel_is_open {
+                        e.prevent_default();
+                        s.is_dragging = true;
+                        drop(s); // Release borrow before setting state
+                        panel_visible_start.set(true);
+                        panel_dragging_start.set(true);
+                    }
+                }
+            }) as Box<dyn FnMut(_)>);
+
+            // Touchmove handler
+            let state_move = state.clone();
+            let panel_drag_offset_move = panel_drag_offset.clone();
+            let panel_visible_move = panel_visible.clone();
+            let panel_dragging_move = panel_dragging.clone();
+
+            let touchmove_closure = Closure::wrap(Box::new(move |e: web_sys::TouchEvent| {
+                if !is_portrait() {
+                    return;
+                }
+
+                let mut s = state_move.borrow_mut();
+
+                if !s.is_active {
+                    return;
+                }
+
+                // Skip if touch started on interactive element
+                if s.on_interactive {
+                    return;
+                }
+
+                if let Some(touch) = e.touches().get(0) {
+                    let y = touch.client_y() as f32;
+                    let delta = y - s.start_y;
+
+                    // If not dragging yet, check if this is a downward swipe to start drag
+                    if !s.is_dragging && delta > 20.0 && !s.was_panel_open {
+                        // Started dragging down from desktop area - open panel
+                        s.is_dragging = true;
+                        drop(s); // Release borrow
+                        panel_visible_move.set(true);
+                        panel_dragging_move.set(true);
+                        return;
+                    }
+
+                    if !s.is_dragging {
+                        return;
+                    }
+
+                    // Calculate offset based on current state
+                    let offset = if s.was_panel_open {
+                        // Panel is open, allow dragging up to close
+                        delta.min(0.0)
+                    } else {
+                        // Panel is closed, allow dragging down to open
+                        delta.max(0.0)
+                    };
+
+                    s.offset = offset;
+                    drop(s); // Release borrow before setting state
+                    panel_drag_offset_move.set(offset);
+
+                    // Prevent default scrolling when dragging panel
+                    e.prevent_default();
+                }
+            }) as Box<dyn FnMut(_)>);
+
+            // Touchend handler
+            let state_end = state.clone();
+            let panel_drag_offset_end = panel_drag_offset.clone();
+            let panel_open_end = panel_open.clone();
+            let panel_visible_end = panel_visible.clone();
+            let panel_dragging_end = panel_dragging.clone();
+            let panel_close_timeout_end = panel_close_timeout.clone();
+
+            let touchend_closure = Closure::wrap(Box::new(move |_e: web_sys::TouchEvent| {
+                if !is_portrait() {
+                    return;
+                }
+
+                let mut s = state_end.borrow_mut();
+                let offset = s.offset;
+                let was_dragging = s.is_dragging;
+                let was_panel_open = s.was_panel_open;
+                let was_on_interactive = s.on_interactive;
+
+                // Reset state
+                s.is_active = false;
+                s.is_dragging = false;
+                s.offset = 0.0;
+                s.on_interactive = false;
+                drop(s); // Release borrow
+
+                panel_dragging_end.set(false);
+                panel_drag_offset_end.set(0.0);
+
+                // Skip if touch was on interactive element
+                if was_on_interactive {
+                    return;
+                }
+
+                if !was_dragging {
+                    return;
+                }
+
+                let threshold = 100.0;
+
+                if was_panel_open {
+                    // Panel was open
+                    if offset < -threshold {
+                        // Dragged up enough to close
+                        panel_open_end.set(false);
+                        let panel_visible_timeout = panel_visible_end.clone();
+                        let timeout = Timeout::new(300, move || {
+                            panel_visible_timeout.set(false);
+                        });
+                        panel_close_timeout_end.set(Some(timeout));
+                    }
+                    // Otherwise keep it open
+                } else {
+                    // Panel was closed
+                    if offset > threshold {
+                        // Dragged down enough to open
+                        panel_open_end.set(true);
+                    } else {
+                        // Not enough drag, hide panel
+                        let panel_visible_timeout = panel_visible_end.clone();
+                        let timeout = Timeout::new(300, move || {
+                            panel_visible_timeout.set(false);
+                        });
+                        panel_close_timeout_end.set(Some(timeout));
+                    }
+                }
+            }) as Box<dyn FnMut(_)>);
+
+            if let Some(doc) = &document {
+                let mut opts = web_sys::AddEventListenerOptions::new();
+                opts.set_passive(false);
+
+                let _ = doc.add_event_listener_with_callback_and_add_event_listener_options(
+                    "touchstart",
+                    touchstart_closure.as_ref().unchecked_ref(),
+                    &opts,
+                );
+                let _ = doc.add_event_listener_with_callback_and_add_event_listener_options(
+                    "touchmove",
+                    touchmove_closure.as_ref().unchecked_ref(),
+                    &opts,
+                );
+                let _ = doc.add_event_listener_with_callback("touchend", touchend_closure.as_ref().unchecked_ref());
+            }
+
+            let document_for_cleanup = document.clone();
+            move || {
+                if let Some(doc) = document_for_cleanup {
+                    let _ = doc.remove_event_listener_with_callback("touchstart", touchstart_closure.as_ref().unchecked_ref());
+                    let _ = doc.remove_event_listener_with_callback("touchmove", touchmove_closure.as_ref().unchecked_ref());
+                    let _ = doc.remove_event_listener_with_callback("touchend", touchend_closure.as_ref().unchecked_ref());
+                }
+            }
+        });
+    }
+
     if !props.visible {
         return html! {};
     }
@@ -384,6 +668,13 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                 </div>
                 <CalendarPopup visible={*calendar_popup_visible} open={*calendar_popup_open} />
             </div>
+            <NotificationPanel
+                visible={*panel_visible}
+                open={*panel_open}
+                drag_offset={*panel_drag_offset}
+                is_dragging={*panel_dragging}
+                on_disconnect={props.on_disconnect.clone()}
+            />
         </>
     }
 }

@@ -152,7 +152,7 @@
   padding-left: 20px;
   padding-right: 20px;
   color: #ffffff;
-  border-radius: 8px;
+  border-radius: 30px;
   background-color: #5555ff;
   border: solid 2px #ffffff;
   outline: none;
@@ -252,7 +252,7 @@
   margin-right: 5px;
 }
 .top-bar .top-bar-btn {
-  border-radius: 8px;
+  border-radius: 30px;
   border: none;
   background-color: inherit;
   color: #ffffff;
@@ -265,6 +265,15 @@
 }
 .top-bar .top-bar-btn .spacer-right {
   margin-right: 18px;
+}
+@media screen and (orientation: portrait) {
+  .top-bar .top-bar-btn {
+    pointer-events: none;
+    cursor: default;
+  }
+  .top-bar .top-bar-btn:hover {
+    background-color: inherit;
+  }
 }
 
 .top-bar-popups {
@@ -284,7 +293,7 @@
   margin-top: -250px;
   margin-right: 20px;
   background-color: rgba(17, 17, 17, 0.7);
-  border-radius: 8px;
+  border-radius: 30px;
   padding: 10px;
   color: #ffffff;
   transition: margin-top 0.25s ease-in-out;
@@ -313,7 +322,7 @@
   color: #ffffff;
   padding-top: 10px;
   padding-bottom: 10px;
-  border-radius: 8px;
+  border-radius: 30px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -325,7 +334,7 @@
   background-color: #ee5555;
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: 30px;
   padding: 8px;
   margin-right: 10px;
 }
@@ -357,7 +366,7 @@
   margin-top: -450px;
   margin-right: 5px;
   background-color: rgba(17, 17, 17, 0.9);
-  border-radius: 8px;
+  border-radius: 30px;
   padding: 15px;
   color: #ffffff;
   transition: margin-top 0.25s ease-in-out;
@@ -447,6 +456,168 @@
   background-color: #5555ff;
   color: #ffffff;
   font-weight: bold;
+}
+
+.notification-panel {
+  display: none;
+}
+@media screen and (orientation: portrait) {
+  .notification-panel {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(17, 17, 17, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: #ffffff;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease-out;
+    z-index: 999990;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+    touch-action: none;
+    overflow-y: auto;
+  }
+  .notification-panel.open {
+    transform: translateY(0);
+  }
+  .notification-panel.dragging {
+    transition: none;
+  }
+}
+.notification-panel .notification-panel-content {
+  padding: 20px;
+  padding-top: 40px;
+}
+.notification-panel .notification-time-section {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.notification-panel .notification-time-section .notification-large-time {
+  font-size: 64px;
+  font-weight: 200;
+  letter-spacing: 2px;
+}
+.notification-panel .notification-time-section .notification-date {
+  font-size: 16px;
+  color: #aaaaaa;
+  margin-top: 5px;
+}
+.notification-panel .notification-quick-settings {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  padding: 12px 16px;
+  background-color: rgba(51, 51, 51, 0.5);
+  border: none;
+  border-radius: 30px;
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn:active {
+  background-color: rgba(51, 51, 51, 0.7);
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn.active {
+  background-color: rgba(85, 85, 255, 0.7);
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn.active .wifi-toggle-icon {
+  color: #ffffff;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn.active .wifi-toggle-network {
+  color: rgba(255, 255, 255, 0.9);
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn.disabled:active {
+  background-color: rgba(51, 51, 51, 0.5);
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn .wifi-toggle-icon {
+  font-size: 20px;
+  color: #aaaaaa;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn .wifi-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn .wifi-toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.notification-panel .notification-quick-settings .wifi-toggle-btn .wifi-toggle-network {
+  font-size: 12px;
+  color: #aaaaaa;
+}
+.notification-panel .notification-section {
+  background-color: rgba(34, 34, 34, 0.5);
+  border-radius: 30px;
+  padding: 15px;
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notification-panel .notification-section .slider-container {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  background: #333333;
+  border-radius: 30px;
+  overflow: hidden;
+}
+.notification-panel .notification-section .slider-container .slider-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #5555ff;
+  border-radius: 30px;
+  transition: width 0.05s ease-out;
+}
+.notification-panel .notification-section .slider-container .slider-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  pointer-events: none;
+  z-index: 2;
+}
+.notification-panel .notification-section .slider-container .slider-content i {
+  font-size: 16px;
+  margin-right: 10px;
+}
+.notification-panel .notification-section .slider-container .slider-content span {
+  font-size: 14px;
+  font-weight: 500;
+}
+.notification-panel .notification-section .slider-container input.slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 4;
+  margin: 0;
 }
 
 .display-none {

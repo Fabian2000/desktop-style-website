@@ -29,6 +29,16 @@
         .spacer-right {
             margin-right: 18px;
         }
+
+        // Disable button interaction on mobile (use pull-down panel instead)
+        @media screen and (orientation: portrait) {
+            pointer-events: none;
+            cursor: default;
+
+            &:hover {
+                background-color: inherit;
+            }
+        }
     }
 }
 
@@ -229,6 +239,193 @@
                     color: #ffffff;
                     font-weight: bold;
                 }
+            }
+        }
+    }
+}
+
+// Mobile notification panel (Android-style pull-down)
+.notification-panel {
+    display: none; // Hidden on desktop
+
+    @media screen and (orientation: portrait) {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba($color-background-dark, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        color: $color-text;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease-out;
+        z-index: 999990;
+        user-select: none;
+        touch-action: none;
+        overflow-y: auto;
+
+        &.open {
+            transform: translateY(0);
+        }
+
+        &.dragging {
+            transition: none;
+        }
+    }
+
+    .notification-panel-content {
+        padding: 20px;
+        padding-top: 40px;
+    }
+
+    .notification-time-section {
+        text-align: center;
+        margin-bottom: 30px;
+
+        .notification-large-time {
+            font-size: 64px;
+            font-weight: 200;
+            letter-spacing: 2px;
+        }
+
+        .notification-date {
+            font-size: 16px;
+            color: $color-text-muted;
+            margin-top: 5px;
+        }
+    }
+
+    .notification-quick-settings {
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+
+        // Android-style WiFi toggle button
+        .wifi-toggle-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            padding: 12px 16px;
+            background-color: rgba($color-background-light, 0.5);
+            border: none;
+            border-radius: $border-radius;
+            color: $color-text;
+            text-align: left;
+            cursor: pointer;
+
+            &:active {
+                background-color: rgba($color-background-light, 0.7);
+            }
+
+            &.active {
+                background-color: rgba($color-primary, 0.7);
+
+                .wifi-toggle-icon {
+                    color: $color-text;
+                }
+
+                .wifi-toggle-network {
+                    color: rgba($color-text, 0.9);
+                }
+            }
+
+            &.disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+
+                &:active {
+                    background-color: rgba($color-background-light, 0.5);
+                }
+            }
+
+            .wifi-toggle-icon {
+                font-size: 20px;
+                color: $color-text-muted;
+            }
+
+            .wifi-toggle-info {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            .wifi-toggle-label {
+                font-size: 14px;
+                font-weight: 500;
+            }
+
+            .wifi-toggle-network {
+                font-size: 12px;
+                color: $color-text-muted;
+            }
+        }
+    }
+
+    .notification-section {
+        background-color: rgba($color-background-medium, 0.5);
+        border-radius: $border-radius;
+        padding: 15px;
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+
+        // Pill-style slider container
+        .slider-container {
+            position: relative;
+            width: 100%;
+            height: 40px;
+            background: $color-background-light;
+            border-radius: $border-radius;
+            overflow: hidden;
+
+            .slider-fill {
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                background: $color-primary;
+                border-radius: $border-radius;
+                transition: width 0.05s ease-out;
+            }
+
+            .slider-content {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                padding: 0 15px;
+                pointer-events: none;
+                z-index: 2;
+
+                i {
+                    font-size: 16px;
+                    margin-right: 10px;
+                }
+
+                span {
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+            }
+
+            input.slider {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                opacity: 0;
+                cursor: pointer;
+                z-index: 4;
+                margin: 0;
             }
         }
     }

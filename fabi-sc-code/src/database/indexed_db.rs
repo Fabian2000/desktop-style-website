@@ -11,6 +11,7 @@ static EVENT_LISTENERS: LazyLock<Mutex<HashMap<String, EventCallback>>> =
 
 #[derive(Debug)]
 pub enum IndexedDbError {
+    #[allow(dead_code)]
     JsError(String),
     DatabaseNotFound,
     #[allow(dead_code)]
@@ -259,7 +260,7 @@ impl IndexedDb {
     fn request_to_promise(request: IdbRequest) -> js_sys::Promise {
         js_sys::Promise::new(&mut |resolve, reject| {
             let resolve_clone = resolve.clone();
-            let reject_clone = reject.clone();
+            let _reject_clone = reject.clone();
 
             let success_closure = Closure::wrap(Box::new(move |event: Event| {
                 if let Some(target) = event.target() {

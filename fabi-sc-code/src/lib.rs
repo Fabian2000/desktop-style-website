@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 
 mod components;
 mod database;
+pub mod filesystem;
 mod utils;
 
 use components::App;

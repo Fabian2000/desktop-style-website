@@ -185,12 +185,6 @@ pub fn lock_screen(props: &LockScreenProps) -> Html {
         String::new()
     };
 
-    // Hint text based on device
-    let hint_text = if *is_mobile {
-        "Swipe up to unlock"
-    } else {
-        "Press any key or click to unlock"
-    };
 
     html! {
         <div
@@ -252,7 +246,7 @@ fn get_current_date() -> String {
     let date = Date::new_0();
     let day = date.get_date();
     let month = date.get_month();
-    let year = date.get_full_year();
+    let _year = date.get_full_year();
     let weekday = date.get_day();
 
     let weekday_name = match weekday {

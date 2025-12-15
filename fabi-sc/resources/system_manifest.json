@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "path": "/home/.system/wallpapers/default.webp",
+      "server_path": "/resources/img/bg.webp",
+      "hash": "bg_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": true
+      }
+    },
+    {
+      "path": "/home/Desktop/README.txt",
+      "server_path": "/resources/files/desktop_readme.txt",
+      "hash": "readme_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    }
+  ]
+}

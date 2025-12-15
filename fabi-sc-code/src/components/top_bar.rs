@@ -397,7 +397,7 @@ pub fn top_bar(props: &TopBarProps) -> Html {
             let state_start = state.clone();
             let panel_visible_start = panel_visible.clone();
             let panel_dragging_start = panel_dragging.clone();
-            let panel_open_start = panel_open.clone();
+            let _panel_open_start = panel_open.clone();
 
             let touchstart_closure = Closure::wrap(Box::new(move |e: web_sys::TouchEvent| {
                 if !is_portrait() {
@@ -612,8 +612,11 @@ pub fn top_bar(props: &TopBarProps) -> Html {
             }) as Box<dyn FnMut(_)>);
 
             if let Some(doc) = &document {
-                let mut opts = web_sys::AddEventListenerOptions::new();
-                opts.set_passive(false);
+                let opts = {
+                    let o = web_sys::AddEventListenerOptions::new();
+                    o.set_passive(false);
+                    o
+                };
 
                 let _ = doc.add_event_listener_with_callback_and_add_event_listener_options(
                     "touchstart",

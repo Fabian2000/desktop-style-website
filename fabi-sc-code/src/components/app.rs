@@ -8,12 +8,8 @@ use super::offline_screen::OfflineScreen;
 use super::taskbar::Taskbar;
 use super::top_bar::TopBar;
 use super::workspace::Workspace;
+use crate::filesystem;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = window, js_name = __bootComplete)]
-    static BOOT_COMPLETE: bool;
-}
 
 fn is_boot_complete() -> bool {
     js_sys::Reflect::get(&web_sys::window().unwrap(), &JsValue::from_str("__bootComplete"))
@@ -33,12 +29,40 @@ enum AppState {
 pub fn app() -> Html {
     let app_state = use_state(|| AppState::Booting);
 
-    // Poll for boot complete signal from JavaScript
+    // Initialize filesystem and poll for boot complete signal
     {
         let app_state = app_state.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
-                // Poll every 100ms until boot is complete
+                // Initialize the virtual filesystem during boot
+                match filesystem::initialize().await {
+                    Ok(result) => {
+                        if result.created_structure {
+                            web_sys::console::log_1(&"VFS: Created initial directory structure".into());
+                        }
+                        if result.files_updated > 0 || result.files_added > 0 {
+                            web_sys::console::log_1(
+                                &format!(
+                                    "VFS: Synced {} files ({} updated, {} added)",
+                                    result.files_updated + result.files_added,
+                                    result.files_updated,
+                                    result.files_added
+                                )
+                                .into(),
+                            );
+                        }
+                        if result.trash_cleaned > 0 {
+                            web_sys::console::log_1(
+                                &format!("VFS: Cleaned {} old trash files", result.trash_cleaned).into(),
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("VFS initialization failed: {}", e).into());
+                    }
+                }
+
+                // Poll every 100ms until boot animation is complete
                 loop {
                     if is_boot_complete() {
                         app_state.set(AppState::LockScreen);

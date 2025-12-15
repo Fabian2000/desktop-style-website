@@ -305,7 +305,7 @@
   }
 }
 .top-bar-popups .wifi-speaker-popup.open {
-  margin-top: 40px;
+  margin-top: 15px;
 }
 .top-bar-popups .wifi-speaker-popup p {
   margin: 0;
@@ -464,7 +464,7 @@
   }
 }
 .top-bar-popups .calendar-popup.open {
-  margin-top: 40px;
+  margin-top: 15px;
 }
 .top-bar-popups .calendar-popup .calendar-time-display {
   text-align: center;

@@ -38,6 +38,10 @@ pub struct AppWindowProps {
     pub on_focus: Callback<()>,
     #[prop_or_default]
     pub on_minimize: Callback<()>,
+    #[prop_or_default]
+    pub on_back: Callback<()>,  // Back button pressed (for Python apps)
+    #[prop_or_default]
+    pub on_show_recents: Callback<()>,  // Show recents/app switcher
 }
 
 /// Check if we're on a mobile device (portrait orientation)
@@ -330,6 +334,33 @@ pub fn app_window(props: &AppWindowProps) -> Html {
         )
     };
 
+    // Mobile navbar callbacks (defined outside html! macro)
+    let on_back_click = {
+        let on_back = props.on_back.clone();
+        Callback::from(move |e: MouseEvent| {
+            e.stop_propagation();
+            // Send back event - Python app decides what to do
+            // (navigate back in app, or do nothing if at root)
+            on_back.emit(());
+        })
+    };
+
+    let on_home_click = {
+        let on_minimize = props.on_minimize.clone();
+        Callback::from(move |e: MouseEvent| {
+            e.stop_propagation();
+            on_minimize.emit(());
+        })
+    };
+
+    let on_recents_click = {
+        let on_show_recents = props.on_show_recents.clone();
+        Callback::from(move |e: MouseEvent| {
+            e.stop_propagation();
+            on_show_recents.emit(());
+        })
+    };
+
     html! {
         <div
             class={window_class}
@@ -377,19 +408,6 @@ pub fn app_window(props: &AppWindowProps) -> Html {
                 </div>
             }
 
-            // Mobile: Header with back button and title
-            if is_mobile_view {
-                <div class="mobile-header">
-                    <button class="mobile-back-btn" onclick={on_close_click.clone()}>
-                        <i class="fa-solid fa-chevron-left"></i>
-                    </button>
-                    <div class="mobile-title">
-                        <i class={icon_class.to_string()}></i>
-                        <span>{display_title}</span>
-                    </div>
-                    <div class="mobile-header-spacer"></div>
-                </div>
-            }
 
             // Content area
             <div class="window-content">
@@ -405,6 +423,21 @@ pub fn app_window(props: &AppWindowProps) -> Html {
             // Resize handle (desktop only, not when maximized)
             if !is_mobile_view && !is_maximized {
                 <div class="window-resize-handle" onmousedown={on_resize_mousedown}></div>
+            }
+
+            // Mobile: Navigation bar at bottom (Back, Home, Recents)
+            if is_mobile_view {
+                <div class="mobile-navbar">
+                    <button class="nav-btn back" onclick={on_back_click} title="Zurück">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button class="nav-btn home" onclick={on_home_click} title="Home">
+                        <i class="fa-solid fa-circle"></i>
+                    </button>
+                    <button class="nav-btn recent" onclick={on_recents_click} title="Letzte Apps">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                </div>
             }
         </div>
     }

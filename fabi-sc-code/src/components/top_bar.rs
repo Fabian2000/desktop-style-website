@@ -413,6 +413,15 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                     return;
                 }
 
+                // Don't intercept if recents-view is visible
+                let recents_open = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(".recents-view").ok().flatten())
+                    .is_some();
+                if recents_open {
+                    return;
+                }
+
                 // Check if panel is open by looking at the DOM
                 // Panel has .open class when open and not dragging, or check if it's visible at all
                 let panel_is_open = web_sys::window()
@@ -511,9 +520,10 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                     let y = touch.client_y() as f32;
                     let delta = y - s.start_y;
 
-                    // If not dragging yet, check if this is a downward swipe to start drag
-                    if !s.is_dragging && delta > 20.0 && !s.was_panel_open {
-                        // Started dragging down from desktop area - open panel
+                    // If not dragging yet, check if this is a downward swipe from top-bar area to start drag
+                    // Only start dragging if the touch STARTED near the top (y < 60)
+                    if !s.is_dragging && delta > 20.0 && !s.was_panel_open && s.start_y < 60.0 {
+                        // Started dragging down from top-bar area - open panel
                         s.is_dragging = true;
                         drop(s); // Release borrow
                         panel_visible_move.set(true);

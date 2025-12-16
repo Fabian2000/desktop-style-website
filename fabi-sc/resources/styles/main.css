@@ -1420,7 +1420,7 @@
   display: none;
 }
 .app-window.mobile {
-  z-index: 50 !important;
+  z-index: 200 !important;
 }
 @media screen and (orientation: portrait) {
   .app-window {
@@ -1428,7 +1428,7 @@
     top: 30px !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: 0 !important;
     width: auto !important;
     height: auto !important;
     border-radius: 0;
@@ -1490,7 +1490,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 30px;
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
@@ -1507,54 +1507,6 @@
 .app-window .window-titlebar .window-controls .window-btn.close:hover {
   background: rgba(255, 80, 80, 0.3);
   color: #ff6b6b;
-}
-.app-window .mobile-header {
-  display: none;
-}
-@media screen and (orientation: portrait) {
-  .app-window .mobile-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 44px;
-    padding: 0 12px;
-    background: rgba(34, 34, 34, 0.8);
-    flex-shrink: 0;
-  }
-  .app-window .mobile-header .mobile-back-btn {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: #ffffff;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: background 0.15s ease;
-  }
-  .app-window .mobile-header .mobile-back-btn i {
-    font-size: 20px;
-  }
-  .app-window .mobile-header .mobile-back-btn:active {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  .app-window .mobile-header .mobile-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #ffffff;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .app-window .mobile-header .mobile-title i {
-    font-size: 18px;
-    color: #aaaaaa;
-  }
-  .app-window .mobile-header .mobile-header-spacer {
-    width: 40px;
-  }
 }
 .app-window .window-content {
   flex: 1;
@@ -1662,6 +1614,168 @@
     transform: scale(0.95);
   }
 }
+.recents-view {
+  position: fixed;
+  top: 30px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.recents-container {
+  width: 100%;
+  max-width: 800px;
+  max-height: 80vh;
+  padding: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.recents-empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 60px 20px;
+  cursor: pointer;
+}
+.recents-empty i {
+  font-size: 48px;
+  margin-bottom: 20px;
+  display: block;
+}
+.recents-empty p {
+  font-size: 16px;
+}
+
+.recents-card-wrapper {
+  position: relative;
+}
+
+.recents-trash-indicator {
+  position: absolute;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 80, 80, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  z-index: 0;
+}
+.recents-trash-indicator.left {
+  left: 20px;
+}
+.recents-trash-indicator.right {
+  right: 20px;
+}
+.recents-trash-indicator i {
+  font-size: 20px;
+}
+
+.recents-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+@media screen and (orientation: portrait) {
+  .recents-list {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.recents-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(17, 17, 17, 0.95);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+  touch-action: pan-y;
+}
+.recents-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.recents-card:active {
+  transform: translateY(-2px);
+}
+
+.recents-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(34, 34, 34, 0.5);
+}
+
+.recents-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+}
+.recents-card-title i {
+  font-size: 16px;
+  color: #aaaaaa;
+}
+
+.recents-card-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.recents-card-close:hover {
+  background: rgba(255, 80, 80, 0.2);
+  color: #ff6b6b;
+}
+.recents-card-close i {
+  font-size: 14px;
+}
+
+.recents-card-preview {
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 17, 17, 0.5);
+  color: rgba(255, 255, 255, 0.3);
+}
+@media screen and (orientation: portrait) {
+  .recents-card-preview {
+    height: 120px;
+  }
+}
+
 .display-none {
   display: none;
 }

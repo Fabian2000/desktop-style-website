@@ -9,6 +9,7 @@ use yew::prelude::*;
 use super::app_window::AppWindow;
 use super::lock_screen::LockScreen;
 use super::offline_screen::OfflineScreen;
+use super::recents_view::{RecentsAppInfo, RecentsView};
 use super::taskbar::Taskbar;
 use super::top_bar::TopBar;
 use super::workspace::Workspace;
@@ -39,6 +40,7 @@ pub struct OpenWindow {
     pub width: u32,
     pub height: u32,
     pub z_index: u32,
+    pub minimized: bool,
 }
 
 #[function_component(App)]
@@ -52,6 +54,7 @@ pub fn app() -> Html {
     let open_windows = use_state(HashMap::<String, OpenWindow>::new);
     let next_z_index = use_state(|| 100u32);
     let active_window = use_state(|| Option::<String>::None);
+    let show_recents = use_state(|| false);
 
     // Initialize filesystem and poll for boot complete signal
     {
@@ -137,38 +140,60 @@ pub fn app() -> Html {
         })
     };
 
-    // Open app callback - creates new window
+    // Open app callback - focus existing window or create new one
     let on_app_click = {
         let open_windows = open_windows.clone();
         let next_z_index = next_z_index.clone();
         let active_window = active_window.clone();
         let window_counter = window_counter.clone();
         Callback::from(move |app_id: String| {
-            let count = {
-                let mut c = window_counter.borrow_mut();
-                *c += 1;
-                *c
-            };
-            let window_id = format!("window-{}", count);
-            let z = *next_z_index;
-            next_z_index.set(z + 1);
+            // Check if a window with this app_id already exists
+            let existing_window = open_windows
+                .iter()
+                .find(|(_, w)| w.app_id == app_id)
+                .map(|(id, _)| id.clone());
 
-            // Default window size (will be overridden by metadata later)
-            let window = OpenWindow {
-                id: window_id.clone(),
-                app_id: app_id.clone(),
-                title: app_id.clone(), // Will be replaced by app name from registry
-                x: 100 + (z as i32 % 10) * 30,
-                y: 50 + (z as i32 % 10) * 30,
-                width: 600,
-                height: 400,
-                z_index: z,
-            };
+            if let Some(window_id) = existing_window {
+                // Focus and restore existing window
+                let z = *next_z_index;
+                next_z_index.set(z + 1);
 
-            let mut windows = (*open_windows).clone();
-            windows.insert(window_id.clone(), window);
-            open_windows.set(windows);
-            active_window.set(Some(window_id));
+                let mut windows = (*open_windows).clone();
+                if let Some(window) = windows.get_mut(&window_id) {
+                    window.z_index = z;
+                    window.minimized = false; // Restore if minimized
+                }
+                open_windows.set(windows);
+                active_window.set(Some(window_id));
+            } else {
+                // Create new window
+                let count = {
+                    let mut c = window_counter.borrow_mut();
+                    *c += 1;
+                    *c
+                };
+                let window_id = format!("window-{}", count);
+                let z = *next_z_index;
+                next_z_index.set(z + 1);
+
+                // Default window size (will be overridden by metadata later)
+                let window = OpenWindow {
+                    id: window_id.clone(),
+                    app_id: app_id.clone(),
+                    title: app_id.clone(), // Will be replaced by app name from registry
+                    x: 100 + (z as i32 % 10) * 30,
+                    y: 50 + (z as i32 % 10) * 30,
+                    width: 600,
+                    height: 400,
+                    z_index: z,
+                    minimized: false,
+                };
+
+                let mut windows = (*open_windows).clone();
+                windows.insert(window_id.clone(), window);
+                open_windows.set(windows);
+                active_window.set(Some(window_id));
+            }
         })
     };
 
@@ -198,9 +223,61 @@ pub fn app() -> Html {
             let mut windows = (*open_windows).clone();
             if let Some(window) = windows.get_mut(&window_id) {
                 window.z_index = z;
+                window.minimized = false; // Restore if minimized
             }
             open_windows.set(windows);
             active_window.set(Some(window_id));
+        })
+    };
+
+    // Minimize window callback
+    let on_window_minimize = {
+        let open_windows = open_windows.clone();
+        let active_window = active_window.clone();
+        Callback::from(move |window_id: String| {
+            let mut windows = (*open_windows).clone();
+            if let Some(window) = windows.get_mut(&window_id) {
+                window.minimized = true;
+            }
+            open_windows.set(windows);
+            // Clear active window when minimized
+            if active_window.as_ref() == Some(&window_id) {
+                active_window.set(None);
+            }
+        })
+    };
+
+    // Show recents callback
+    let on_show_recents = {
+        let show_recents = show_recents.clone();
+        Callback::from(move |_| {
+            show_recents.set(true);
+        })
+    };
+
+    // Recents: select app (restore/focus)
+    let on_recents_select = {
+        let on_window_focus = on_window_focus.clone();
+        let show_recents = show_recents.clone();
+        Callback::from(move |window_id: String| {
+            on_window_focus.emit(window_id);
+            show_recents.set(false);
+        })
+    };
+
+    // Recents: close app
+    let on_recents_close = {
+        let on_window_close = on_window_close.clone();
+        Callback::from(move |window_id: String| {
+            on_window_close.emit(window_id);
+        })
+    };
+
+    // Recents: dismiss (close recents view)
+    let on_recents_dismiss = {
+        let show_recents = show_recents.clone();
+        Callback::from(move |_| {
+            show_recents.set(false);
         })
     };
 
@@ -222,39 +299,60 @@ pub fn app() -> Html {
     html! {
         <>
             <TopBar visible={show_desktop && !is_offline && !is_booting} on_disconnect={on_disconnect} />
-            <Workspace visible={show_desktop && !is_offline && !is_booting}>
-                { for windows_list.iter().map(|window| {
-                    let on_close = {
-                        let on_window_close = on_window_close.clone();
-                        let window_id = window.id.clone();
-                        Callback::from(move |_| on_window_close.emit(window_id.clone()))
-                    };
-                    let on_focus = {
-                        let on_window_focus = on_window_focus.clone();
-                        let window_id = window.id.clone();
-                        Callback::from(move |_| on_window_focus.emit(window_id.clone()))
-                    };
-                    html! {
-                        <AppWindow
-                            key={window.id.clone()}
-                            window_id={window.id.clone()}
-                            app_id={window.app_id.clone()}
-                            title={window.title.clone()}
-                            x={window.x}
-                            y={window.y}
-                            width={window.width}
-                            height={window.height}
-                            z_index={window.z_index}
-                            on_close={on_close}
-                            on_focus={on_focus}
-                        />
-                    }
-                })}
-            </Workspace>
+            <Workspace visible={show_desktop && !is_offline && !is_booting} />
+            // Windows rendered OUTSIDE workspace so they have their own stacking context
+            // This allows mobile windows to appear above the mobile-dock
+            { for windows_list.iter().filter(|w| !w.minimized).map(|window| {
+                let on_close = {
+                    let on_window_close = on_window_close.clone();
+                    let window_id = window.id.clone();
+                    Callback::from(move |_| on_window_close.emit(window_id.clone()))
+                };
+                let on_focus = {
+                    let on_window_focus = on_window_focus.clone();
+                    let window_id = window.id.clone();
+                    Callback::from(move |_| on_window_focus.emit(window_id.clone()))
+                };
+                let on_minimize = {
+                    let on_window_minimize = on_window_minimize.clone();
+                    let window_id = window.id.clone();
+                    Callback::from(move |_| on_window_minimize.emit(window_id.clone()))
+                };
+                let on_recents = on_show_recents.clone();
+                html! {
+                    <AppWindow
+                        key={window.id.clone()}
+                        window_id={window.id.clone()}
+                        app_id={window.app_id.clone()}
+                        title={window.title.clone()}
+                        x={window.x}
+                        y={window.y}
+                        width={window.width}
+                        height={window.height}
+                        z_index={window.z_index}
+                        on_close={on_close}
+                        on_focus={on_focus}
+                        on_minimize={on_minimize}
+                        on_show_recents={on_recents}
+                    />
+                }
+            })}
             <Taskbar
                 visible={show_desktop && !is_offline && !is_booting}
                 active_app={active_app_id}
                 on_app_click={on_app_click}
+            />
+            // Recents/App Switcher View
+            <RecentsView
+                visible={*show_recents}
+                apps={windows_list.iter().map(|w| RecentsAppInfo {
+                    window_id: w.id.clone(),
+                    app_id: w.app_id.clone(),
+                    title: w.title.clone(),
+                }).collect::<Vec<_>>()}
+                on_select={on_recents_select}
+                on_close={on_recents_close}
+                on_dismiss={on_recents_dismiss}
             />
             <OfflineScreen visible={is_offline} />
             <LockScreen visible={show_lock_screen || is_booting} boot_complete={!is_booting} on_login={on_login} />

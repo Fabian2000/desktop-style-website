@@ -30,6 +30,8 @@ pub struct TaskbarProps {
     #[prop_or_default]
     pub active_app: Option<String>,
     #[prop_or_default]
+    pub open_apps: Vec<String>,  // All open app IDs (for running indicator)
+    #[prop_or_default]
     pub on_app_click: Callback<String>,
 }
 
@@ -465,10 +467,11 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     };
 
                     let is_active = props.active_app.as_ref().map(|a| a == &app.id).unwrap_or(false);
-                    let class = if is_active {
-                        "taskbar-item active"
-                    } else {
-                        "taskbar-item"
+                    let is_open = props.open_apps.contains(&app.id);
+                    let class = match (is_active, is_open) {
+                        (true, _) => "taskbar-item active",
+                        (false, true) => "taskbar-item open",
+                        (false, false) => "taskbar-item",
                     };
 
                     html! {

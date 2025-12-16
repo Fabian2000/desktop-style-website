@@ -43,15 +43,27 @@
             transform: translateY(-3px) scale(0.95);
         }
 
-        // Running app indicator (dot below)
-        &.active::after {
+        // Running app indicator (dot below) - active = filled, open = smaller
+        &.active::after,
+        &.open::after {
             content: "";
             position: absolute;
             bottom: -4px;
-            width: 4px;
-            height: 4px;
-            background: $color-text;
+            left: 50%;
+            transform: translateX(-50%);
             border-radius: 50%;
+            background: $color-text;
+        }
+
+        &.active::after {
+            width: 5px;
+            height: 5px;
+        }
+
+        &.open::after {
+            width: 3px;
+            height: 3px;
+            opacity: 0.6;
         }
 
         .taskbar-icon {

@@ -910,14 +910,23 @@
 .taskbar .taskbar-item:active {
   transform: translateY(-3px) scale(0.95);
 }
-.taskbar .taskbar-item.active::after {
+.taskbar .taskbar-item.active::after, .taskbar .taskbar-item.open::after {
   content: "";
   position: absolute;
   bottom: -4px;
-  width: 4px;
-  height: 4px;
-  background: #ffffff;
+  left: 50%;
+  transform: translateX(-50%);
   border-radius: 50%;
+  background: #ffffff;
+}
+.taskbar .taskbar-item.active::after {
+  width: 5px;
+  height: 5px;
+}
+.taskbar .taskbar-item.open::after {
+  width: 3px;
+  height: 3px;
+  opacity: 0.6;
 }
 .taskbar .taskbar-item .taskbar-icon {
   font-size: 24px;

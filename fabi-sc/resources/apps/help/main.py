@@ -6,13 +6,13 @@ import fabiscos_window as window
 import fabiscos_state as state
 
 # Styles
+# Main container - like Terminal: height 100%, flex column
 container_style = ui.style(
     background="#1a1a2e",
     height="100%",
     display="flex",
     flex_direction="row",
-    box_sizing="border-box",
-    overflow="hidden"
+    box_sizing="border-box"
 )
 
 # Mobile container - column layout
@@ -21,8 +21,7 @@ mobile_container_style = ui.style(
     height="100%",
     display="flex",
     flex_direction="column",
-    box_sizing="border-box",
-    overflow="hidden"
+    box_sizing="border-box"
 )
 
 sidebar_style = ui.style(
@@ -75,7 +74,9 @@ content_style = ui.style(
     color="#e0e0e0",
     line_height="1.5",
     background="#1a1a2e",
-    min_height="0"
+    min_height="0",
+    word_wrap="break-word",
+    overflow_wrap="break-word"
 )
 
 nav_btn_style = ui.style(
@@ -494,13 +495,14 @@ def render():
     # Get current page title for mobile header
     page_title = next((label for key, label in nav_labels if key == current_page), "Help")
 
-    # Desktop layout: sidebar left, content right
+    # Desktop layout: direct container with sidebar and content (like Terminal)
+    desktop_wrapper_style = ui.style(height="100%")
     desktop_html = ui.desktop_only([
-        ui.row([
+        ui.container([
             ui.column(nav_items, style=sidebar_style),
-            ui.column(content_parts, style=content_style)
+            ui.container(content_parts, style=content_style)  # container statt column für normales Scrolling
         ], style=container_style)
-    ])
+    ], style=desktop_wrapper_style)
 
     # Mobile layout: header with burger, collapsible menu, content
     mobile_parts = []
@@ -519,14 +521,15 @@ def render():
         mobile_parts.append(ui.column(nav_items, style=mobile_sidebar_style))
 
     # Content area
-    mobile_parts.append(ui.column(content_parts, style=content_style))
+    mobile_parts.append(ui.container(content_parts, style=content_style))
 
     mobile_html = ui.mobile_only([
         ui.column(mobile_parts, style=mobile_container_style)
     ])
 
-    # Combine both layouts
-    html = ui.container([desktop_html, mobile_html])
+    # Combine both layouts - needs height 100% to fill .app-ui
+    wrapper_style = ui.style(height="100%")
+    html = ui.container([desktop_html, mobile_html], style=wrapper_style)
 
     window.set_content(html)
     window.set_title("Help")

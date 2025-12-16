@@ -54,7 +54,7 @@
     {
       "path": "/home/.system/apps/help/main.py",
       "server_path": "/resources/apps/help/main.py",
-      "hash": "help_main_v6",
+      "hash": "help_main_v10",
       "permissions": {
         "readonly": true,
         "system": true,

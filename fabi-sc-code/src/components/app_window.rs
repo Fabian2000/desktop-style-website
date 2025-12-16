@@ -400,7 +400,7 @@ if '__click_handler__' in dir() and __click_handler__:
                         let mousemove = Closure::wrap(Box::new(move |e: MouseEvent| {
                             if is_dragging {
                                 let (offset_x, offset_y) = *drag_offset_clone;
-                                let (win_width, _win_height) = *size_clone;
+                                let (win_width, win_height) = *size_clone;
 
                                 // Get viewport dimensions
                                 let viewport_width = web_sys::window()
@@ -410,16 +410,16 @@ if '__click_handler__' in dir() and __click_handler__:
                                     .map(|w| w.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1080.0) as i32)
                                     .unwrap_or(1080);
 
-                                // Calculate position bounds:
-                                // - Left: at least 100px of window must be visible
-                                // - Right: window can go until only 100px remains visible
-                                // - Top: must stay below 30px (for titlebar access)
-                                // - Bottom: titlebar (30px) must remain visible
-                                let min_visible = 100;
-                                let min_x = -(win_width as i32) + min_visible;
-                                let max_x = viewport_width - min_visible;
-                                let min_y = 30; // Keep below top bar
-                                let max_y = viewport_height - 30; // Keep titlebar visible
+                                // Workspace boundaries
+                                let top_bar = 30;
+                                let taskbar_height = 90;
+
+                                // Window must stay fully inside workspace (no overflow)
+                                // Note: -3 accounts for window border and shadows
+                                let min_x = 0;
+                                let max_x = (viewport_width - (win_width as i32) - 3).max(0);
+                                let min_y = top_bar;
+                                let max_y = (viewport_height - taskbar_height - (win_height as i32)).max(min_y);
 
                                 let new_x = (e.client_x() - offset_x).max(min_x).min(max_x);
                                 let new_y = (e.client_y() - offset_y).max(min_y).min(max_y);

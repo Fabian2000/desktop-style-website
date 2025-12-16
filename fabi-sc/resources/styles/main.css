@@ -1535,13 +1535,13 @@
 }
 .app-window .window-content .app-ui {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
 }
-.app-window .window-content .app-ui > div {
+.app-window .window-content .app-ui > * {
+  flex: 1;
   min-height: 0;
 }
 .app-window .mobile-navbar {
@@ -1814,12 +1814,6 @@
   display: block;
 }
 
-.ui-desktop-only {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
 @media screen and (orientation: portrait) {
   .ui-desktop-only {
     display: none !important;
@@ -1827,15 +1821,30 @@
 }
 
 .ui-mobile-only {
-  display: none;
+  display: none !important;
 }
 @media screen and (orientation: portrait) {
   .ui-mobile-only {
     display: flex !important;
     flex-direction: column;
-    height: 100%;
-    min-height: 0;
   }
+}
+
+* {
+  -moz-user-select: none;
+       user-select: none;
+  -webkit-user-select: none;
+}
+
+.selectable,
+input,
+textarea,
+pre,
+code,
+[contenteditable=true] {
+  -moz-user-select: text;
+       user-select: text;
+  -webkit-user-select: text;
 }
 
 * {

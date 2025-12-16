@@ -183,17 +183,17 @@
         color: $color-text;
         min-height: 0; // Important for flex children to shrink
 
-        // App UI container must fill the entire content area
+        // App UI container - fills content area, passes height to children
         .app-ui {
             flex: 1;
+            min-height: 0;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            min-height: 0; // Important for nested flex containers
-            height: 100%;
-            overflow: hidden; // Children handle scrolling
 
-            // Direct children that are flex containers should fill height
-            > div {
+            // First child (Python app root) must fill available space
+            > * {
+                flex: 1;
                 min-height: 0;
             }
         }

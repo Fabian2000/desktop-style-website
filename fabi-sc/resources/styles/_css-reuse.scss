@@ -8,25 +8,35 @@
 
 // UI API responsive containers
 .ui-desktop-only {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-
     @media screen and (orientation: portrait) {
         display: none !important;
     }
 }
 
 .ui-mobile-only {
-    display: none;
+    display: none !important;
 
     @media screen and (orientation: portrait) {
         display: flex !important;
         flex-direction: column;
-        height: 100%;
-        min-height: 0;
     }
+}
+
+// Disable text selection by default (it's an app, not a document)
+* {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+// Allow selection in specific areas
+.selectable,
+input,
+textarea,
+pre,
+code,
+[contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 // Custom scrollbar - system-wide

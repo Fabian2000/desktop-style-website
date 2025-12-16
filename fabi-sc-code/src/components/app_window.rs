@@ -24,6 +24,9 @@ pub struct AppWindowProps {
     pub window_id: String,
     pub app_id: String,
     pub title: String,
+    /// Icon class (FontAwesome) or image path for the app
+    #[prop_or_default]
+    pub icon: String,
     #[prop_or(100)]
     pub x: i32,
     #[prop_or(100)]
@@ -95,18 +98,22 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     // Store whether back button was pressed (for Python on_back handler)
     let pending_back = use_mut_ref(|| false);
 
+    // Store the button click handler for re-execution (when button with on_click is pressed)
+    let pending_click = use_mut_ref(|| None::<String>);
+
     // Trigger for re-running the app (incremented on input submit or back press)
     // Using use_state for the actual trigger, plus a Cell to track the count
     // in closures that don't have access to current state
     let run_counter = use_state(|| 0u32);
     let run_counter_cell = use_mut_ref(|| 0u32);
 
-    // Helper function to run Python code with optional input or back event
+    // Helper function to run Python code with optional input, back event, or click handler
     // Returns true if Python requested window close
     fn run_python_app(
         code: &str,
         input: Option<&str>,
         back_pressed: bool,
+        click_handler: Option<&str>,
         window_id: &str,
         app_id: &str,
         app_path: &str,
@@ -123,7 +130,7 @@ pub fn app_window(props: &AppWindowProps) -> Html {
             app_path.to_string(),
         );
 
-        // Prepare code with input/back injection if needed
+        // Prepare code with input/back/click injection if needed
         let full_code = if let Some(input_val) = input {
             // Inject __input__ variable and call on_input if defined
             web_sys::console::log_1(&format!("[Python] Injecting input: {}", input_val).into());
@@ -151,6 +158,22 @@ if '__back_pressed__' in dir() and __back_pressed__:
     else:
         print("[Python] WARNING: on_back not defined!")
 "#,
+                code
+            )
+        } else if let Some(handler) = click_handler {
+            // Inject __click_handler__ and call the specified function
+            web_sys::console::log_1(&format!("[Python] Injecting click handler: {}", handler).into());
+            format!(
+                r#"__click_handler__ = "{}"
+{}
+if '__click_handler__' in dir() and __click_handler__:
+    if __click_handler__ in dir():
+        print("[Python] Calling " + __click_handler__ + "()")
+        eval(__click_handler__ + "()")
+    else:
+        print("[Python] WARNING: " + __click_handler__ + " not defined!")
+"#,
+                handler.replace('\\', "\\\\").replace('"', "\\\""),
                 code
             )
         } else {
@@ -220,11 +243,14 @@ if '__back_pressed__' in dir() and __back_pressed__:
                 let input = pending_input.borrow_mut().take();
                 // Take pending back event
                 let back_pressed = std::mem::replace(&mut *pending_back.borrow_mut(), false);
+                // Take pending click handler
+                let click_handler = pending_click.borrow_mut().take();
 
                 let close_requested = run_python_app(
                     code,
                     input.as_deref(),
                     back_pressed,
+                    click_handler.as_deref(),
                     &window_id,
                     &app_id,
                     &app_path,
@@ -270,6 +296,37 @@ if '__back_pressed__' in dir() and __back_pressed__:
                             *pending_input.borrow_mut() = Some(value);
                             // Increment counter via cell (always has current value)
                             // then set state to trigger re-render
+                            let new_val = {
+                                let mut cell = run_counter_cell.borrow_mut();
+                                *cell = cell.wrapping_add(1);
+                                *cell
+                            };
+                            run_counter.set(new_val);
+                        }
+                    }
+                }
+            }
+        })
+    };
+
+    // Click handler for buttons with data-on-click attribute
+    let on_click = {
+        let pending_click = pending_click.clone();
+        let run_counter = run_counter.clone();
+        let run_counter_cell = run_counter_cell.clone();
+        Callback::from(move |e: MouseEvent| {
+            // Check if the target or any ancestor has data-on-click
+            if let Some(target) = e.target() {
+                if let Ok(element) = target.dyn_into::<web_sys::Element>() {
+                    // Use closest() to find button with data-on-click (handles clicks on icon children)
+                    if let Ok(Some(button)) = element.closest("[data-on-click]") {
+                        if let Some(handler) = button.get_attribute("data-on-click") {
+                            e.prevent_default();
+                            e.stop_propagation();
+                            web_sys::console::log_1(&format!("[Button] Clicked, handler: {}", handler).into());
+
+                            // Set the pending click handler and trigger re-run
+                            *pending_click.borrow_mut() = Some(handler);
                             let new_val = {
                                 let mut cell = run_counter_cell.borrow_mut();
                                 *cell = cell.wrapping_add(1);
@@ -343,8 +400,29 @@ if '__back_pressed__' in dir() and __back_pressed__:
                         let mousemove = Closure::wrap(Box::new(move |e: MouseEvent| {
                             if is_dragging {
                                 let (offset_x, offset_y) = *drag_offset_clone;
-                                let new_x = (e.client_x() - offset_x).max(0);
-                                let new_y = (e.client_y() - offset_y).max(30);
+                                let (win_width, _win_height) = *size_clone;
+
+                                // Get viewport dimensions
+                                let viewport_width = web_sys::window()
+                                    .map(|w| w.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1920.0) as i32)
+                                    .unwrap_or(1920);
+                                let viewport_height = web_sys::window()
+                                    .map(|w| w.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1080.0) as i32)
+                                    .unwrap_or(1080);
+
+                                // Calculate position bounds:
+                                // - Left: at least 100px of window must be visible
+                                // - Right: window can go until only 100px remains visible
+                                // - Top: must stay below 30px (for titlebar access)
+                                // - Bottom: titlebar (30px) must remain visible
+                                let min_visible = 100;
+                                let min_x = -(win_width as i32) + min_visible;
+                                let max_x = viewport_width - min_visible;
+                                let min_y = 30; // Keep below top bar
+                                let max_y = viewport_height - 30; // Keep titlebar visible
+
+                                let new_x = (e.client_x() - offset_x).max(min_x).min(max_x);
+                                let new_y = (e.client_y() - offset_y).max(min_y).min(max_y);
                                 position_clone.set((new_x, new_y));
                             } else {
                                 // Resizing
@@ -510,7 +588,14 @@ if '__back_pressed__' in dir() and __back_pressed__:
     };
 
     // Icon and title come from props (loaded from metadata.json)
-    let icon_class = "fa-solid fa-cube"; // Default fallback, real icon comes from taskbar
+    // Use icon from props, fallback to default cube
+    // Determine if icon is FontAwesome class or image path
+    let icon_value = if props.icon.is_empty() {
+        "fa-solid fa-cube".to_string()
+    } else {
+        props.icon.clone()
+    };
+    let is_fa_icon = icon_value.starts_with("fa-") || icon_value.starts_with("fas ") || icon_value.starts_with("far ");
     let display_title = &props.title;
 
     // Build classes and styles based on state
@@ -589,6 +674,7 @@ if '__back_pressed__' in dir() and __back_pressed__:
             style={window_style}
             onmousedown={on_window_mousedown}
             onkeydown={on_keydown}
+            onclick={on_click}
         >
             // Desktop: Title bar with window controls
             if !is_mobile_view {
@@ -598,7 +684,11 @@ if '__back_pressed__' in dir() and __back_pressed__:
                     ondblclick={on_titlebar_dblclick}
                 >
                     <div class="window-title">
-                        <i class={icon_class.to_string()}></i>
+                        if is_fa_icon {
+                            <i class={icon_value.clone()}></i>
+                        } else {
+                            <img src={icon_value.clone()} alt="App Icon" class="window-icon-img" />
+                        }
                         <span>{display_title}</span>
                     </div>
                     <div class="window-controls">
@@ -647,14 +737,22 @@ if '__back_pressed__' in dir() and __back_pressed__:
                 } else if props.python_code.is_none() {
                     // No code yet - show loading
                     <div style="color: #888; text-align: center; padding-top: 50px;">
-                        <i class={format!("{} fa-3x", icon_class)} style="margin-bottom: 20px; display: block;"></i>
+                        if is_fa_icon {
+                            <i class={format!("{} fa-3x", icon_value)} style="margin-bottom: 20px; display: block;"></i>
+                        } else {
+                            <img src={icon_value.clone()} alt="App Icon" style="width: 64px; height: 64px; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto;" />
+                        }
                         <p>{format!("App: {}", props.app_id)}</p>
                         <p style="font-size: 12px; color: #666;">{"Loading..."}</p>
                     </div>
                 } else {
                     // Code provided but no UI output
                     <div style="color: #888; text-align: center; padding-top: 50px;">
-                        <i class={format!("{} fa-3x", icon_class)} style="margin-bottom: 20px; display: block;"></i>
+                        if is_fa_icon {
+                            <i class={format!("{} fa-3x", icon_value)} style="margin-bottom: 20px; display: block;"></i>
+                        } else {
+                            <img src={icon_value.clone()} alt="App Icon" style="width: 64px; height: 64px; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto;" />
+                        }
                         <p>{format!("App: {}", props.app_id)}</p>
                         <p style="font-size: 12px; color: #666;">{"App running (no UI output)"}</p>
                     </div>

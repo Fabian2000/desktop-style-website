@@ -81,14 +81,25 @@ pub fn render_label(content: &str, style: &Style) -> String {
 }
 
 /// Render a button
-pub fn render_button(text: &str, style: &Style) -> String {
-    let escaped = sanitizer::escape_html(text);
+/// If on_click is provided, the button will dispatch a click event to call the Python function
+/// If icon is provided, it will be rendered as a FontAwesome icon instead of text
+pub fn render_button(text: &str, on_click: Option<&str>, icon: Option<&str>, style: &Style) -> String {
     let id = generate_widget_id();
+    let on_click_attr = on_click
+        .map(|name| format!(r#" data-on-click="{}""#, sanitizer::sanitize_attribute(name)))
+        .unwrap_or_default();
+    let content = if let Some(icon_class) = icon {
+        // Render icon instead of text
+        format!(r#"<i class="{}"></i>"#, sanitizer::sanitize_attribute(icon_class))
+    } else {
+        sanitizer::escape_html(text)
+    };
     format!(
-        r#"<button class="ui-button" data-widget-id="{}"{} >{}</button>"#,
+        r#"<button class="ui-button" data-widget-id="{}"{}{} >{}</button>"#,
         sanitizer::sanitize_attribute(&id),
+        on_click_attr,
         style.to_inline(),
-        escaped
+        content
     )
 }
 
@@ -238,6 +249,22 @@ pub fn render_link(text: &str, href: &str, style: &Style) -> String {
         style.to_inline(),
         escaped_text
     )
+}
+
+/// Render a FontAwesome icon
+pub fn render_icon(icon_class: &str, style: &Style) -> String {
+    let safe_class = sanitizer::sanitize_attribute(icon_class);
+    format!(r#"<i class="{}"{} ></i>"#, safe_class, style.to_inline())
+}
+
+/// Render a desktop-only container (hidden on mobile)
+pub fn render_desktop_only(children: &str, style: &Style) -> String {
+    format!(r#"<div class="ui-desktop-only"{}>{}</div>"#, style.to_inline(), children)
+}
+
+/// Render a mobile-only container (hidden on desktop)
+pub fn render_mobile_only(children: &str, style: &Style) -> String {
+    format!(r#"<div class="ui-mobile-only"{}>{}</div>"#, style.to_inline(), children)
 }
 
 #[cfg(test)]

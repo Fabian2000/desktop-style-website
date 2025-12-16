@@ -35,6 +35,8 @@ pub struct OpenWindow {
     pub id: String,
     pub app_id: String,
     pub title: String,
+    /// Icon class (FontAwesome) or image path
+    pub icon: String,
     pub x: i32,
     pub y: i32,
     pub width: u32,
@@ -214,6 +216,54 @@ pub fn app() -> Html {
                 let z_async = z;
 
                 spawn_local(async move {
+                    // Try to read metadata.json from app directory
+                    let metadata_path = format!("{}metadata.json", app_path_async);
+                    web_sys::console::log_1(&format!("[App] Loading metadata from: {}", metadata_path).into());
+                    let (app_title, app_icon, app_width, app_height) = match filesystem::vfs::read_to_string(&metadata_path).await {
+                        Ok(json) => {
+                            web_sys::console::log_1(&format!("[App] Metadata loaded: {}", json).into());
+                            match serde_json::from_str::<serde_json::Value>(&json) {
+                                Ok(meta) => {
+                                    let title = meta.get("name")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or(&app_id_async)
+                                        .to_string();
+                                    let icon_raw = meta.get("icon")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("fa-solid fa-cube");
+                                    // If icon is a file path (not FA class), make it relative to server
+                                    let icon = if icon_raw.starts_with("fa-") || icon_raw.starts_with("fas ") || icon_raw.starts_with("far ") {
+                                        icon_raw.to_string()
+                                    } else {
+                                        // Convert VFS path to server path for images
+                                        // app_path_async is like "/home/.system/apps/terminal/"
+                                        // We need "/resources/apps/terminal/icon.png"
+                                        let app_name = app_id_async.clone();
+                                        format!("/resources/apps/{}/{}", app_name, icon_raw)
+                                    };
+                                    let width = meta.get("window")
+                                        .and_then(|w| w.get("width"))
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(600) as u32;
+                                    let height = meta.get("window")
+                                        .and_then(|w| w.get("height"))
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(400) as u32;
+                                    web_sys::console::log_1(&format!("[App] Parsed: title={}, icon={}, {}x{}", title, icon, width, height).into());
+                                    (title, icon, width, height)
+                                }
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("[App] JSON parse error: {}", e).into());
+                                    (app_id_async.clone(), "fa-solid fa-cube".to_string(), 600, 400)
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("[App] Could not load metadata {}: {}", metadata_path, e).into());
+                            (app_id_async.clone(), "fa-solid fa-cube".to_string(), 600, 400)
+                        }
+                    };
+
                     // Try to read main.py from app directory
                     let main_py_path = format!("{}main.py", app_path_async);
                     web_sys::console::log_1(&format!("[App] Loading Python code from: {}", main_py_path).into());
@@ -231,15 +281,16 @@ pub fn app() -> Html {
                         }
                     };
 
-                    // Create window with code already loaded
+                    // Create window with code and metadata loaded
                     let window = OpenWindow {
                         id: window_id_async.clone(),
                         app_id: app_id_async.clone(),
-                        title: app_id_async.clone(),
+                        title: app_title,
+                        icon: app_icon,
                         x: 100 + (z_async as i32 % 10) * 30,
                         y: 50 + (z_async as i32 % 10) * 30,
-                        width: 600,
-                        height: 400,
+                        width: app_width,
+                        height: app_height,
                         z_index: z_async,
                         minimized: false,
                         python_code,
@@ -392,6 +443,7 @@ pub fn app() -> Html {
                         window_id={window.id.clone()}
                         app_id={window.app_id.clone()}
                         title={window.title.clone()}
+                        icon={window.icon.clone()}
                         x={window.x}
                         y={window.y}
                         width={window.width}

@@ -10,310 +10,441 @@ container_style = ui.style(
     background="#1a1a2e",
     height="100%",
     display="flex",
+    flex_direction="row",
+    box_sizing="border-box",
+    overflow="hidden"
+)
+
+# Mobile container - column layout
+mobile_container_style = ui.style(
+    background="#1a1a2e",
+    height="100%",
+    display="flex",
     flex_direction="column",
-    box_sizing="border-box"
+    box_sizing="border-box",
+    overflow="hidden"
 )
 
 sidebar_style = ui.style(
     background="#16213e",
-    padding="12px",
-    min_width="180px",
-    border_right="1px solid #0f3460"
+    padding="8px",
+    min_width="160px",
+    max_width="160px",
+    border_right="1px solid #0f3460",
+    overflow_y="auto",
+    display="flex",
+    flex_direction="column",
+    gap="4px",
+    flex_shrink="0",
+    height="100%"
+)
+
+# Mobile sidebar (full width, collapsible)
+mobile_sidebar_style = ui.style(
+    background="#16213e",
+    padding="8px",
+    border_bottom="1px solid #0f3460",
+    display="flex",
+    flex_direction="column",
+    gap="4px"
+)
+
+# Mobile header with burger
+mobile_header_style = ui.style(
+    background="#16213e",
+    padding="8px 12px",
+    display="flex",
+    align_items="center",
+    justify_content="space-between",
+    border_bottom="1px solid #0f3460"
+)
+
+burger_btn_style = ui.style(
+    background="transparent",
+    border="none",
+    color="#94a3b8",
+    font_size="18px",
+    cursor="pointer",
+    padding="4px 8px"
 )
 
 content_style = ui.style(
     flex="1",
-    padding="20px",
-    overflow="auto",
+    padding="16px",
+    overflow_y="auto",
     color="#e0e0e0",
-    line_height="1.6"
+    line_height="1.5",
+    background="#1a1a2e",
+    min_height="0"
 )
 
 nav_btn_style = ui.style(
     background="transparent",
-    border="none",
+    border="1px solid #334155",
     color="#94a3b8",
-    padding="10px 12px",
-    text_align="left",
-    width="100%",
+    padding="6px 10px",
     cursor="pointer",
-    border_radius="6px",
-    margin_bottom="4px"
+    border_radius="4px",
+    font_size="12px"
 )
 
 nav_btn_active_style = ui.style(
     background="#0f3460",
-    border="none",
+    border="1px solid #60a5fa",
     color="#60a5fa",
-    padding="10px 12px",
-    text_align="left",
-    width="100%",
+    padding="6px 10px",
     cursor="pointer",
-    border_radius="6px",
-    margin_bottom="4px"
+    border_radius="4px",
+    font_size="12px"
 )
 
 title_style = ui.style(
-    font_size="24px",
+    font_size="20px",
     font_weight="bold",
     color="#60a5fa",
-    margin_bottom="16px"
+    margin_bottom="12px"
 )
 
-subtitle_style = ui.style(
-    font_size="18px",
+mobile_title_style = ui.style(
+    font_size="14px",
     font_weight="bold",
-    color="#818cf8",
-    margin_top="20px",
-    margin_bottom="12px"
+    color="#60a5fa",
+    margin="0"
 )
 
 code_style = ui.style(
     background="#0d1117",
-    padding="12px",
-    border_radius="6px",
+    padding="10px",
+    border_radius="4px",
     font_family="'Cascadia Code', 'Fira Code', monospace",
-    font_size="13px",
+    font_size="12px",
     color="#7dd3fc",
     overflow_x="auto",
-    margin="12px 0"
+    margin="8px 0",
+    white_space="pre"
 )
 
 para_style = ui.style(
-    margin_bottom="12px",
-    color="#cbd5e1"
+    margin_bottom="8px",
+    color="#cbd5e1",
+    font_size="13px"
 )
 
 # Content pages
 pages = {
     "welcome": {
-        "title": "Willkommen bei FabiScOS",
-        "content": """
-FabiScOS ist ein virtuelles Desktop-Betriebssystem das komplett im Browser lauft.
+        "title": "Welcome to FabiScOS",
+        "content": """FabiScOS is a virtual desktop OS running entirely in your browser.
 
-Es wurde mit Rust, WebAssembly und Python entwickelt.
+Built with Rust, WebAssembly and Python.
 
 Features:
-- Virtuelles Dateisystem (VFS) mit Persistenz
-- Python-Apps die im Browser laufen
-- Desktop- und Mobile-Ansicht
-- Fenster-Management (Drag, Resize, Minimize)
+  - Virtual filesystem (VFS) with persistence
+  - Python apps running in browser
+  - Desktop and mobile views
+  - Window management (drag, resize, minimize)
 
 Navigation:
-- Desktop: Klicke auf Apps in der Taskbar
-- Mobile: Nutze Back, Home und Recents Buttons
-"""
+  - Desktop: Click apps in taskbar
+  - Mobile: Use Back, Home and Recents buttons"""
     },
     "filesystem": {
-        "title": "Dateisystem (VFS)",
-        "content": """
-FabiScOS hat ein virtuelles Dateisystem das in IndexedDB gespeichert wird.
+        "title": "Filesystem (VFS)",
+        "content": """FabiScOS has a virtual filesystem stored in IndexedDB.
 
-Ordnerstruktur:
-/home/
-  Desktop/     - Dateien auf dem Desktop
-  Documents/   - Dokumente
-  Pictures/    - Bilder
-  apps/        - Deine eigenen Apps
-  .system/     - System-Dateien (versteckt)
-    apps/      - System-Apps (Terminal, etc.)
+Directory structure:
+  /home/
+    Desktop/     - Desktop files
+    Documents/   - Documents
+    Pictures/    - Images
+    apps/        - Your custom apps
+    .system/     - System files (hidden)
+      apps/      - System apps (Terminal, etc.)
 
-Terminal-Befehle:
-- ls          - Ordnerinhalt anzeigen
-- cd <path>   - Ordner wechseln
-- pwd         - Aktueller Pfad
-- cat <file>  - Datei anzeigen
-- mkdir <dir> - Ordner erstellen
-- touch <file>- Datei erstellen
-- rm <file>   - Datei loschen
-- cp <s> <d>  - Datei kopieren
-- mv <s> <d>  - Datei verschieben
-"""
+Terminal commands:
+  ls          - List directory
+  cd <path>   - Change directory
+  pwd         - Print working directory
+  cat <file>  - Show file contents
+  mkdir <dir> - Create directory
+  touch <file>- Create file
+  rm <file>   - Delete file
+  cp <s> <d>  - Copy file
+  mv <s> <d>  - Move file"""
     },
     "programming": {
-        "title": "Apps Programmieren",
-        "content": """
-Apps werden in Python geschrieben und laufen im Browser.
+        "title": "Programming Apps",
+        "content": """Apps are written in Python and run in the browser.
 
-App-Struktur:
-/home/apps/meine_app/
-  metadata.json  - App-Infos
-  main.py        - Hauptcode
+App structure:
+  /home/apps/my_app/
+    metadata.json  - App info
+    main.py        - Main code
 
-metadata.json Beispiel:
-{
-  "id": "meine_app",
-  "name": "Meine App",
-  "version": "1.0.0",
-  "icon": "fa-solid fa-star",
-  "entry": "main.py"
-}
+metadata.json example:
+  {
+    "id": "my_app",
+    "name": "My App",
+    "version": "1.0.0",
+    "icon": "icon.png",
+    "entry": "main.py"
+  }
 
-Minimales main.py:
-import fabiscos_ui as ui
-import fabiscos_window as window
+Minimal main.py:
+  import fabiscos_ui as ui
+  import fabiscos_window as window
 
-window.set_content(
-    ui.text("Hallo Welt!")
-)
-window.set_title("Meine App")
-"""
+  window.set_content(
+      ui.text("Hello World!")
+  )
+  window.set_title("My App")"""
     },
-    "ui_api": {
+    "ui": {
         "title": "UI API",
-        "content": """
-import fabiscos_ui as ui
+        "content": """import fabiscos_ui as ui
 
-Styles erstellen:
-style = ui.style(color="#fff", padding="10px")
+Create styles:
+  style = ui.style(color="#fff", padding="10px")
 
 Widgets:
-ui.text(content, style=s)      - Mehrzeiliger Text
-ui.label(content, style=s)     - Einzeiliger Text
-ui.button(text, style=s)       - Button
-ui.input(placeholder, style=s, on_submit="fn")
-ui.image(src, alt="", style=s)
-ui.divider(style=s)
+  ui.text(content, style=s)     - Multiline text
+  ui.label(content, style=s)    - Single line
+  ui.button(text, on_click="fn", style=s)
+  ui.input(placeholder, on_submit="fn", style=s)
+  ui.image(src, alt="", style=s)
+  ui.divider(style=s)
 
-Container:
-ui.container([...], style=s)   - Generischer Container
-ui.row([...], style=s)         - Horizontal (flexbox)
-ui.column([...], style=s)      - Vertikal (flexbox)
-ui.spacer()                    - Flexibler Abstand
+Containers:
+  ui.container([...], style=s)  - Generic
+  ui.row([...], style=s)        - Horizontal flex
+  ui.column([...], style=s)     - Vertical flex
+  ui.spacer()                   - Flexible space
+  ui.desktop_only([...])        - Hidden on mobile
+  ui.mobile_only([...])         - Hidden on desktop
 
-Style-Properties (snake_case):
-background, color, padding, margin
-font_size, font_family, font_weight
-border, border_radius
-display, flex, flex_direction
-width, height, min_width, max_width
-"""
+Style properties (snake_case):
+  background, color, padding, margin
+  font_size, font_family, font_weight
+  border, border_radius
+  display, flex, flex_direction
+  width, height, overflow"""
     },
-    "window_api": {
+    "window": {
         "title": "Window API",
-        "content": """
-import fabiscos_window as window
+        "content": """import fabiscos_window as window
 
-Fenster-Kontrolle:
-window.set_title(title)     - Titel setzen
-window.set_content(html)    - UI setzen
-window.close()              - Fenster schliessen
+Window control:
+  window.set_title(title)    - Set title
+  window.set_content(html)   - Set UI
+  window.close()             - Close window
 
-Event-Handler definieren:
-def on_input(value):
-    # Wird aufgerufen bei Enter im Input
-    print("Eingabe:", value)
-    render()
+Event handlers:
+  def on_click_button():
+      # Called when button clicked
+      print("Button clicked!")
+      render()
 
-def on_back():
-    # Mobile Back-Button
-    window.close()
+  def on_input(value):
+      # Called on Enter in input
+      print("Input:", value)
+      render()
 
-Input mit Handler:
-ui.input("", on_submit="on_input")
-"""
+  def on_back():
+      # Mobile back button
+      window.close()
+
+Button with handler:
+  ui.button("Click Me", on_click="on_click_button")
+
+Input with handler:
+  ui.input("", on_submit="on_input")"""
     },
-    "vfs_api": {
+    "vfs": {
         "title": "VFS API",
-        "content": """
-import fabiscos_vfs as vfs
+        "content": """import fabiscos_vfs as vfs
 
-Dateien lesen/schreiben:
-vfs.read_text(path)         - Text lesen
-vfs.write(path, content)    - Text schreiben
-vfs.exists(path)            - Existiert?
+Read/write files:
+  vfs.read_text(path)        - Read text
+  vfs.write(path, content)   - Write text
+  vfs.exists(path)           - Exists?
 
-Ordner:
-vfs.list_dir(path)          - Inhalt auflisten
-vfs.mkdir(path)             - Ordner erstellen
+Directories:
+  vfs.list_dir(path)         - List contents
+  vfs.mkdir(path)            - Create dir
 
-Operationen:
-vfs.remove(path)            - Loschen
-vfs.copy(src, dst)          - Kopieren
-vfs.move(src, dst)          - Verschieben
+Operations:
+  vfs.remove(path)           - Delete
+  vfs.copy(src, dst)         - Copy
+  vfs.move(src, dst)         - Move
 
-Arbeitsverzeichnis:
-vfs.cwd()                   - Aktueller Pfad
-vfs.set_cwd(path)           - Pfad setzen
-"""
+Working directory:
+  vfs.cwd()                  - Get current
+  vfs.set_cwd(path)          - Set current"""
     },
-    "state_api": {
+    "state": {
         "title": "State API",
-        "content": """
-import fabiscos_state as state
+        "content": """import fabiscos_state as state
 
-State bleibt zwischen App-Ausfuhrungen erhalten.
+State persists between app runs.
 
-Werte speichern:
-state.set(key, value)       - String speichern
-state.get(key)              - String lesen
+Store values:
+  state.set(key, value)      - Store string
+  state.get(key)             - Read string
 
-Listen:
-state.set_list(key, list)   - Liste speichern
-state.get_list(key)         - Liste lesen
+Lists:
+  state.set_list(key, list)  - Store list
+  state.get_list(key)        - Read list
 
-Beispiel (Counter):
-count = state.get("count") or "0"
-count = int(count) + 1
-state.set("count", str(count))
+Example (Counter):
+  count = state.get("count") or "0"
+  count = int(count) + 1
+  state.set("count", str(count))
 
-Beispiel (Terminal History):
-lines = state.get_list("output") or []
-lines.append("Neue Zeile")
-state.set_list("output", lines)
-"""
+Example (History):
+  lines = state.get_list("output") or []
+  lines.append("New line")
+  state.set_list("output", lines)"""
     },
     "example": {
-        "title": "Beispiel-App",
-        "content": """
-Komplette Counter-App:
+        "title": "Example App",
+        "content": """Complete counter app:
 
-import fabiscos_ui as ui
-import fabiscos_window as window
-import fabiscos_state as state
+  import fabiscos_ui as ui
+  import fabiscos_window as window
+  import fabiscos_state as state
 
-# State laden
-count = int(state.get("count") or "0")
+  count = int(state.get("count") or "0")
 
-def on_input(value):
-    global count
-    if value == "+":
-        count += 1
-    elif value == "-":
-        count -= 1
-    state.set("count", str(count))
-    render()
+  def on_plus():
+      global count
+      count += 1
+      state.set("count", str(count))
+      render()
 
-def on_back():
-    window.close()
+  def on_minus():
+      global count
+      count -= 1
+      state.set("count", str(count))
+      render()
 
-def render():
-    window.set_content(
-        ui.column([
-            ui.label(f"Count: {count}",
-                style=ui.style(font_size="32px")),
-            ui.row([
-                ui.input("+ oder -",
-                    on_submit="on_input")
-            ])
-        ], style=ui.style(padding="20px"))
-    )
-    window.set_title("Counter")
+  def on_back():
+      window.close()
 
-render()
-"""
+  def render():
+      window.set_content(
+          ui.column([
+              ui.label(f"Count: {count}",
+                  style=ui.style(font_size="32px")),
+              ui.row([
+                  ui.button("-", on_click="on_minus"),
+                  ui.button("+", on_click="on_plus")
+              ])
+          ], style=ui.style(padding="20px"))
+      )
+      window.set_title("Counter")
+
+  render()"""
     }
 }
 
-# Current page
-current_page = state.get("page") or "welcome"
+nav_labels = [
+    ("welcome", "Welcome"),
+    ("filesystem", "Files"),
+    ("programming", "Coding"),
+    ("ui", "UI"),
+    ("window", "Window"),
+    ("vfs", "VFS"),
+    ("state", "State"),
+    ("example", "Example")
+]
 
-def on_input(value):
-    global current_page
-    if value in pages:
-        current_page = value
-        state.set("page", value)
-        render()
+# Current page and mobile menu state
+current_page = state.get("page") or "welcome"
+menu_open = state.get("menu_open") == "1"
+
+# Toggle mobile menu
+def toggle_menu():
+    global menu_open
+    menu_open = not menu_open
+    state.set("menu_open", "1" if menu_open else "0")
+    render()
+
+# Navigation functions - one for each page
+def nav_welcome():
+    global current_page, menu_open
+    current_page = "welcome"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_filesystem():
+    global current_page, menu_open
+    current_page = "filesystem"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_programming():
+    global current_page, menu_open
+    current_page = "programming"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_ui():
+    global current_page, menu_open
+    current_page = "ui"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_window():
+    global current_page, menu_open
+    current_page = "window"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_vfs():
+    global current_page, menu_open
+    current_page = "vfs"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_state():
+    global current_page, menu_open
+    current_page = "state"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+def nav_example():
+    global current_page, menu_open
+    current_page = "example"
+    menu_open = False
+    state.set("page", current_page)
+    state.set("menu_open", "0")
+    render()
+
+# Map page keys to handler names
+nav_handlers = {
+    "welcome": "nav_welcome",
+    "filesystem": "nav_filesystem",
+    "programming": "nav_programming",
+    "ui": "nav_ui",
+    "window": "nav_window",
+    "vfs": "nav_vfs",
+    "state": "nav_state",
+    "example": "nav_example"
+}
 
 def on_back():
     window.close()
@@ -321,66 +452,83 @@ def on_back():
 def render():
     page = pages.get(current_page, pages["welcome"])
 
-    # Build navigation
+    # Build navigation buttons with click handlers
     nav_items = []
-    nav_labels = {
-        "welcome": "Willkommen",
-        "filesystem": "Dateisystem",
-        "programming": "Programmieren",
-        "ui_api": "UI API",
-        "window_api": "Window API",
-        "vfs_api": "VFS API",
-        "state_api": "State API",
-        "example": "Beispiel-App"
-    }
-
-    for key, label in nav_labels.items():
+    for key, label in nav_labels:
         style = nav_btn_active_style if key == current_page else nav_btn_style
-        # Use hidden input for navigation
-        nav_items.append(ui.button(label, style=style))
+        handler = nav_handlers[key]
+        nav_items.append(ui.button(label, style=style, on_click=handler))
 
     # Build content
     content_parts = [ui.label(page["title"], style=title_style)]
 
-    # Split content into paragraphs and code blocks
-    lines = page["content"].strip().split("\n")
-    current_text = []
+    # Simple text display with code formatting
+    lines = page["content"].split("\n")
+    text_block = []
     in_code = False
 
     for line in lines:
-        if not in_code and (line.startswith("  ") or line.startswith("{")):
+        # Detect code blocks (lines starting with 2+ spaces after non-code)
+        is_code_line = line.startswith("  ") and line.strip()
+
+        if is_code_line and not in_code:
             # Flush text
-            if current_text:
-                content_parts.append(ui.text("\n".join(current_text), style=para_style))
-                current_text = []
+            if text_block:
+                content_parts.append(ui.text("\n".join(text_block), style=para_style))
+                text_block = []
             in_code = True
-            current_text.append(line)
-        elif in_code and not line.startswith("  ") and not line.startswith("}") and line.strip() and not line.startswith("{"):
-            # End code block
-            content_parts.append(ui.text("\n".join(current_text), style=code_style))
-            current_text = [line]
+            text_block.append(line)
+        elif not is_code_line and in_code and line.strip():
+            # End code, start text
+            content_parts.append(ui.text("\n".join(text_block), style=code_style))
+            text_block = [line]
             in_code = False
         else:
-            current_text.append(line)
+            text_block.append(line)
 
     # Flush remaining
-    if current_text:
+    if text_block:
         style = code_style if in_code else para_style
-        content_parts.append(ui.text("\n".join(current_text), style=style))
+        content_parts.append(ui.text("\n".join(text_block), style=style))
 
-    # Hidden input for navigation
-    nav_input = ui.input("Seite...", style=ui.style(
-        position="absolute",
-        top="-100px"
-    ), on_submit="on_input")
+    # Get current page title for mobile header
+    page_title = next((label for key, label in nav_labels if key == current_page), "Help")
 
-    html = ui.row([
-        ui.column(nav_items, style=sidebar_style),
-        ui.column(content_parts, style=content_style),
-        nav_input
-    ], style=container_style)
+    # Desktop layout: sidebar left, content right
+    desktop_html = ui.desktop_only([
+        ui.row([
+            ui.column(nav_items, style=sidebar_style),
+            ui.column(content_parts, style=content_style)
+        ], style=container_style)
+    ])
+
+    # Mobile layout: header with burger, collapsible menu, content
+    mobile_parts = []
+
+    # Header with burger and title
+    burger_icon_class = "fa-solid fa-xmark" if menu_open else "fa-solid fa-bars"
+    mobile_parts.append(
+        ui.row([
+            ui.button("", icon=burger_icon_class, style=burger_btn_style, on_click="toggle_menu"),
+            ui.label(page_title, style=mobile_title_style)
+        ], style=mobile_header_style)
+    )
+
+    # Collapsible navigation (shown when menu_open)
+    if menu_open:
+        mobile_parts.append(ui.column(nav_items, style=mobile_sidebar_style))
+
+    # Content area
+    mobile_parts.append(ui.column(content_parts, style=content_style))
+
+    mobile_html = ui.mobile_only([
+        ui.column(mobile_parts, style=mobile_container_style)
+    ])
+
+    # Combine both layouts
+    html = ui.container([desktop_html, mobile_html])
 
     window.set_content(html)
-    window.set_title("Help - " + page["title"])
+    window.set_title("Help")
 
 render()

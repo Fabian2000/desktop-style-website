@@ -24,7 +24,7 @@
     {
       "path": "/home/.system/apps/terminal/metadata.json",
       "server_path": "/resources/apps/terminal/metadata.json",
-      "hash": "terminal_meta_v1",
+      "hash": "terminal_meta_v3",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -44,7 +44,7 @@
     {
       "path": "/home/.system/apps/help/metadata.json",
       "server_path": "/resources/apps/help/metadata.json",
-      "hash": "help_meta_v1",
+      "hash": "help_meta_v3",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -54,7 +54,7 @@
     {
       "path": "/home/.system/apps/help/main.py",
       "server_path": "/resources/apps/help/main.py",
-      "hash": "help_main_v1",
+      "hash": "help_main_v6",
       "permissions": {
         "readonly": true,
         "system": true,

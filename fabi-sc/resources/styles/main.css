@@ -1483,6 +1483,13 @@
   color: #aaaaaa;
   flex-shrink: 0;
 }
+.app-window .window-titlebar .window-title .window-icon-img {
+  width: 16px;
+  height: 16px;
+  -o-object-fit: contain;
+     object-fit: contain;
+  flex-shrink: 0;
+}
 .app-window .window-titlebar .window-title span {
   white-space: nowrap;
   overflow: hidden;
@@ -1521,14 +1528,20 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
   background: rgba(17, 17, 17, 0.5);
   color: #ffffff;
+  min-height: 0;
 }
 .app-window .window-content .app-ui {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.app-window .window-content .app-ui > div {
   min-height: 0;
 }
 .app-window .mobile-navbar {
@@ -1799,6 +1812,30 @@
 
 .display-block {
   display: block;
+}
+
+.ui-desktop-only {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+@media screen and (orientation: portrait) {
+  .ui-desktop-only {
+    display: none !important;
+  }
+}
+
+.ui-mobile-only {
+  display: none;
+}
+@media screen and (orientation: portrait) {
+  .ui-mobile-only {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
 }
 
 * {

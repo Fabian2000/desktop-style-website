@@ -6,6 +6,29 @@
     display: block;
 }
 
+// UI API responsive containers
+.ui-desktop-only {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+
+    @media screen and (orientation: portrait) {
+        display: none !important;
+    }
+}
+
+.ui-mobile-only {
+    display: none;
+
+    @media screen and (orientation: portrait) {
+        display: flex !important;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+}
+
 // Custom scrollbar - system-wide
 * {
     scrollbar-width: thin;

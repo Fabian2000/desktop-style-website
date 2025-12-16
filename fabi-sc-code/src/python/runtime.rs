@@ -483,6 +483,9 @@ mod fabiscos_ui {
     }
 
     /// Button element
+    /// Usage: ui.button("Click Me", style=my_style, on_click="my_handler")
+    /// Usage with icon: ui.button("", icon="fa-solid fa-bars", on_click="my_handler")
+    /// The on_click parameter specifies the Python function to call when clicked
     #[pyfunction]
     fn button(text: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
         let mut kw: std::collections::HashMap<String, String> = kwargs
@@ -490,8 +493,10 @@ mod fabiscos_ui {
             .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
             .collect();
         let base_style = kw.remove("style");
+        let on_click = kw.remove("on_click");
+        let icon = kw.remove("icon");
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
-        ui::render_button(&text, &s)
+        ui::render_button(&text, on_click.as_deref(), icon.as_deref(), &s)
     }
 
     /// Input field
@@ -638,6 +643,45 @@ mod fabiscos_ui {
         let base_style = kw.remove("style");
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
         ui::render_link(&text, &href, &s)
+    }
+
+    /// FontAwesome icon
+    /// Usage: ui.icon("fa-solid fa-bars", style=s)
+    #[pyfunction]
+    fn icon(icon_class: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
+        let mut kw: std::collections::HashMap<String, String> = kwargs
+            .into_iter()
+            .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
+            .collect();
+        let base_style = kw.remove("style");
+        let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
+        ui::render_icon(&icon_class, &s)
+    }
+
+    /// Desktop-only container (hidden on mobile)
+    /// Usage: ui.desktop_only([...], style=s)
+    #[pyfunction]
+    fn desktop_only(children: Vec<String>, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
+        let mut kw: std::collections::HashMap<String, String> = kwargs
+            .into_iter()
+            .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
+            .collect();
+        let base_style = kw.remove("style");
+        let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
+        ui::render_desktop_only(&children.join(""), &s)
+    }
+
+    /// Mobile-only container (hidden on desktop)
+    /// Usage: ui.mobile_only([...], style=s)
+    #[pyfunction]
+    fn mobile_only(children: Vec<String>, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
+        let mut kw: std::collections::HashMap<String, String> = kwargs
+            .into_iter()
+            .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
+            .collect();
+        let base_style = kw.remove("style");
+        let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
+        ui::render_mobile_only(&children.join(""), &s)
     }
 }
 

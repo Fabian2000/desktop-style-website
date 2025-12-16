@@ -259,7 +259,16 @@
             transform: translateY(0);
         }
 
+        // Pinned state styling
+        &.pinned {
+            .app-icon-wrapper {
+                background: linear-gradient(145deg, rgba($color-primary, 0.2), rgba($color-primary, 0.1));
+                border-color: rgba($color-primary, 0.3);
+            }
+        }
+
         .app-icon-wrapper {
+            position: relative;
             width: 48px;
             height: 48px;
             display: flex;
@@ -273,6 +282,26 @@
             i {
                 font-size: 22px;
                 color: $color-text;
+            }
+
+            // Pinned indicator badge
+            .pinned-indicator {
+                position: absolute;
+                top: -4px;
+                right: -4px;
+                width: 18px;
+                height: 18px;
+                background: $color-primary;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 2px solid rgba($color-background-dark, 0.95);
+
+                i {
+                    font-size: 8px;
+                    color: $color-text;
+                }
             }
         }
 
@@ -476,6 +505,50 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+    }
+}
+
+// Context Menu for Pin/Unpin
+.context-menu {
+    background: rgba($color-background-dark, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid rgba($color-text, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    padding: 6px;
+    min-width: 180px;
+    z-index: 10000;
+
+    .context-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 14px;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        color: $color-text;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+        text-align: left;
+
+        &:hover {
+            background: rgba($color-text, 0.1);
+        }
+
+        &:active {
+            background: rgba($color-text, 0.15);
+        }
+
+        i {
+            font-size: 14px;
+            color: rgba($color-text, 0.7);
+            width: 16px;
+            text-align: center;
         }
     }
 }

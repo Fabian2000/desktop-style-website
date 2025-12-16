@@ -27,20 +27,58 @@
 .app-window {
     position: absolute;
     background: rgba($color-background-dark, 0.95);
-    border-radius: $border-radius;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
     border: 1px solid rgba($color-text, 0.1);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-width: 300px;
+    min-height: 200px;
 
-    // Mobile: fullscreen windows
+    // Maximized state
+    &.maximized {
+        position: fixed !important;
+        top: 30px !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 90px !important;
+        width: auto !important;
+        height: auto !important;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+
+        @media screen and (orientation: portrait) {
+            bottom: 0 !important;
+        }
+
+        .window-titlebar {
+            cursor: default;
+        }
+    }
+
+    // Minimized state
+    &.minimized {
+        display: none;
+    }
+
+    // Mobile: always fullscreen, BELOW the mobile dock (z-index 98)
+    &.mobile {
+        z-index: 50 !important; // Below mobile-dock (z-index: 98)
+    }
+
     @media screen and (orientation: portrait) {
-        position: fixed;
-        top: 30px;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        position: fixed !important;
+        top: 30px !important;
+        left: 0 !important;
+        right: 0 !important;
+        // Leave space for mobile dock at bottom
+        bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+        width: auto !important;
+        height: auto !important;
         border-radius: 0;
         border: none;
     }
@@ -51,10 +89,11 @@
         align-items: center;
         justify-content: space-between;
         height: 40px;
-        padding: 0 15px;
-        background: rgba($color-background-medium, 0.8);
+        padding: 0 12px;
+        background: rgba($color-background-medium, 0.6);
         cursor: grab;
         user-select: none;
+        flex-shrink: 0;
 
         &:active {
             cursor: grabbing;
@@ -62,6 +101,7 @@
 
         @media screen and (orientation: portrait) {
             cursor: default;
+            padding: 0 8px;
 
             &:active {
                 cursor: default;
@@ -69,50 +109,113 @@
         }
 
         .window-title {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             color: $color-text;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            overflow: hidden;
 
             i {
-                font-size: 16px;
+                font-size: 14px;
                 color: $color-text-muted;
+                flex-shrink: 0;
+            }
+
+            span {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
         }
 
         .window-controls {
             display: flex;
-            gap: 8px;
+            align-items: center;
+            gap: 4px;
 
-            @media screen and (orientation: portrait) {
-                display: none;
-            }
-
-            button {
-                width: 14px;
-                height: 14px;
-                border-radius: 50%;
+            .window-btn {
+                width: 28px;
+                height: 28px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 6px;
                 border: none;
+                background: transparent;
+                color: rgba($color-text, 0.7);
                 cursor: pointer;
-                transition: opacity 0.2s ease;
+                transition: all 0.15s ease;
+
+                i {
+                    font-size: 12px;
+                }
 
                 &:hover {
-                    opacity: 0.8;
+                    background: rgba($color-text, 0.1);
+                    color: $color-text;
                 }
 
-                &.close {
-                    background: #ff5f57;
+                &.close:hover {
+                    background: rgba(255, 80, 80, 0.3);
+                    color: #ff6b6b;
+                }
+            }
+        }
+    }
+
+    // Mobile header (replaces titlebar on mobile)
+    .mobile-header {
+        display: none;
+
+        @media screen and (orientation: portrait) {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 44px;
+            padding: 0 12px;
+            background: rgba($color-background-medium, 0.8);
+            flex-shrink: 0;
+
+            .mobile-back-btn {
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border: none;
+                color: $color-text;
+                cursor: pointer;
+                border-radius: 8px;
+                transition: background 0.15s ease;
+
+                i {
+                    font-size: 20px;
                 }
 
-                &.minimize {
-                    background: #ffbd2e;
+                &:active {
+                    background: rgba($color-text, 0.1);
                 }
+            }
 
-                &.maximize {
-                    background: #28c840;
+            .mobile-title {
+                font-size: 16px;
+                font-weight: 600;
+                color: $color-text;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+
+                i {
+                    font-size: 18px;
+                    color: $color-text-muted;
                 }
+            }
+
+            .mobile-header-spacer {
+                width: 40px; // Same width as back button for centering
             }
         }
     }
@@ -121,30 +224,107 @@
     .window-content {
         flex: 1;
         overflow: auto;
-        padding: 20px;
+        background: rgba($color-background-dark, 0.5);
         color: $color-text;
+    }
+
+    // Mobile navigation bar (Android-style buttons at bottom)
+    .mobile-navbar {
+        display: none;
 
         @media screen and (orientation: portrait) {
-            padding: 15px;
-            // Leave space for taskbar
-            padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            height: 48px;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            background: rgba($color-background-dark, 0.95);
+            border-top: 1px solid rgba($color-text, 0.1);
+            flex-shrink: 0;
+
+            .nav-btn {
+                flex: 1;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border: none;
+                color: rgba($color-text, 0.6);
+                cursor: pointer;
+                transition: all 0.15s ease;
+
+                i {
+                    font-size: 18px;
+                }
+
+                &:active {
+                    color: $color-text;
+                    background: rgba($color-text, 0.1);
+                }
+
+                &.back i {
+                    font-size: 20px;
+                }
+
+                &.home i {
+                    font-size: 14px;
+                }
+
+                &.recent i {
+                    font-size: 16px;
+                }
+            }
+        }
+    }
+
+    // Resize handle (bottom-right corner)
+    .window-resize-handle {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 16px;
+        height: 16px;
+        cursor: se-resize;
+
+        &::before {
+            content: "";
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            width: 8px;
+            height: 8px;
+            border-right: 2px solid rgba($color-text, 0.3);
+            border-bottom: 2px solid rgba($color-text, 0.3);
+        }
+
+        &:hover::before {
+            border-color: rgba($color-text, 0.5);
+        }
+
+        @media screen and (orientation: portrait) {
+            display: none;
         }
     }
 }
 
 // Animations for windows
 .app-window {
-    animation: windowOpen 0.3s ease-out;
+    animation: windowOpen 0.2s ease-out;
 
     &.closing {
-        animation: windowClose 0.2s ease-in forwards;
+        animation: windowClose 0.15s ease-in forwards;
+    }
+
+    &.maximized {
+        animation: none;
     }
 }
 
 @keyframes windowOpen {
     from {
         opacity: 0;
-        transform: scale(0.9);
+        transform: scale(0.95);
     }
     to {
         opacity: 1;
@@ -159,6 +339,6 @@
     }
     to {
         opacity: 0;
-        transform: scale(0.9);
+        transform: scale(0.95);
     }
 }

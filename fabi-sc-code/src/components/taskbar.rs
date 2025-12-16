@@ -1,13 +1,27 @@
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use web_sys::TouchEvent;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::{MouseEvent, TouchEvent};
 use yew::prelude::*;
 
+use crate::database::{PinnedApp, TaskbarDb};
+
+/// App info for display
 #[derive(Clone, PartialEq)]
-pub struct AppInfo {
-    pub id: &'static str,
-    pub icon: &'static str,
-    pub label: &'static str,
+pub struct AppDisplayInfo {
+    pub id: String,
+    pub icon: String,
+    pub label: String,
+}
+
+impl AppDisplayInfo {
+    fn new(id: &str, icon: &str, label: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            icon: icon.to_string(),
+            label: label.to_string(),
+        }
+    }
 }
 
 #[derive(Properties, PartialEq)]
@@ -19,97 +33,87 @@ pub struct TaskbarProps {
     pub on_app_click: Callback<String>,
 }
 
-// Desktop dock apps (pinned favorites)
-fn get_dock_apps() -> Vec<AppInfo> {
+/// Get icon class for an app ID
+fn get_app_icon(app_id: &str) -> &'static str {
+    match app_id {
+        "terminal" => "fa-solid fa-terminal",
+        "files" => "fa-solid fa-folder",
+        "browser" => "fa-solid fa-globe",
+        "settings" => "fa-solid fa-gear",
+        "gallery" => "fa-solid fa-images",
+        "music" => "fa-solid fa-music",
+        "contacts" => "fa-solid fa-address-book",
+        "info" | "about" => "fa-solid fa-circle-info",
+        _ => "fa-solid fa-cube",
+    }
+}
+
+/// Get label for an app ID
+fn get_app_label(app_id: &str) -> &'static str {
+    match app_id {
+        "terminal" => "Terminal",
+        "files" => "Files",
+        "browser" => "Browser",
+        "settings" => "Settings",
+        "gallery" => "Gallery",
+        "music" => "Music",
+        "contacts" => "Contacts",
+        "info" | "about" => "About",
+        _ => "App",
+    }
+}
+
+/// All available apps for the start menu
+fn get_all_apps() -> Vec<AppDisplayInfo> {
     vec![
-        AppInfo {
-            id: "files",
-            icon: "fa-solid fa-folder",
-            label: "Files",
-        },
-        AppInfo {
-            id: "browser",
-            icon: "fa-solid fa-globe",
-            label: "Browser",
-        },
-        AppInfo {
-            id: "terminal",
-            icon: "fa-solid fa-terminal",
-            label: "Terminal",
-        },
-        AppInfo {
-            id: "settings",
-            icon: "fa-solid fa-gear",
-            label: "Settings",
-        },
+        AppDisplayInfo::new("browser", "fa-solid fa-globe", "Browser"),
+        AppDisplayInfo::new("files", "fa-solid fa-folder", "Files"),
+        AppDisplayInfo::new("terminal", "fa-solid fa-terminal", "Terminal"),
+        AppDisplayInfo::new("settings", "fa-solid fa-gear", "Settings"),
+        AppDisplayInfo::new("info", "fa-solid fa-circle-info", "About"),
+        AppDisplayInfo::new("gallery", "fa-solid fa-images", "Gallery"),
+        AppDisplayInfo::new("music", "fa-solid fa-music", "Music"),
+        AppDisplayInfo::new("contacts", "fa-solid fa-address-book", "Contacts"),
     ]
 }
 
-// All apps for the app drawer/start menu
-fn get_all_apps() -> Vec<AppInfo> {
-    vec![
-        AppInfo {
-            id: "browser",
-            icon: "fa-solid fa-globe",
-            label: "Browser",
-        },
-        AppInfo {
-            id: "files",
-            icon: "fa-solid fa-folder",
-            label: "Files",
-        },
-        AppInfo {
-            id: "terminal",
-            icon: "fa-solid fa-terminal",
-            label: "Terminal",
-        },
-        AppInfo {
-            id: "settings",
-            icon: "fa-solid fa-gear",
-            label: "Settings",
-        },
-        AppInfo {
-            id: "info",
-            icon: "fa-solid fa-circle-info",
-            label: "About",
-        },
-        AppInfo {
-            id: "gallery",
-            icon: "fa-solid fa-images",
-            label: "Gallery",
-        },
-        AppInfo {
-            id: "music",
-            icon: "fa-solid fa-music",
-            label: "Music",
-        },
-        AppInfo {
-            id: "contacts",
-            icon: "fa-solid fa-address-book",
-            label: "Contacts",
-        },
-    ]
+/// Convert PinnedApp to AppDisplayInfo
+fn pinned_to_display(pinned: &[PinnedApp]) -> Vec<AppDisplayInfo> {
+    pinned
+        .iter()
+        .map(|p| AppDisplayInfo {
+            id: p.id.clone(),
+            icon: get_app_icon(&p.id).to_string(),
+            label: get_app_label(&p.id).to_string(),
+        })
+        .collect()
 }
 
-// Mobile: Dock favorites (bottom bar)
-fn get_mobile_dock_apps() -> Vec<AppInfo> {
-    vec![
-        AppInfo {
-            id: "browser",
-            icon: "fa-solid fa-globe",
-            label: "Browser",
-        },
-        AppInfo {
-            id: "files",
-            icon: "fa-solid fa-folder",
-            label: "Files",
-        },
-        AppInfo {
-            id: "settings",
-            icon: "fa-solid fa-gear",
-            label: "Settings",
-        },
-    ]
+/// Mobile dock apps (first 3 pinned apps)
+fn get_mobile_dock_apps(pinned: &[AppDisplayInfo]) -> Vec<AppDisplayInfo> {
+    pinned.iter().take(3).cloned().collect()
+}
+
+/// Context menu state
+#[derive(Clone, PartialEq)]
+struct ContextMenuState {
+    visible: bool,
+    x: i32,
+    y: i32,
+    app_id: String,
+    is_pinned: bool,
+}
+
+impl Default for ContextMenuState {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            x: 0,
+            y: 0,
+            app_id: String::new(),
+            is_pinned: false,
+        }
+    }
 }
 
 #[function_component(Taskbar)]
@@ -118,9 +122,29 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         return html! {};
     }
 
-    let dock_apps = get_dock_apps();
+    // Pinned apps state (loaded from DB)
+    let pinned_apps = use_state(Vec::<AppDisplayInfo>::new);
+    let pinned_ids = use_state(Vec::<String>::new);
+
+    // Load pinned apps on mount
+    {
+        let pinned_apps = pinned_apps.clone();
+        let pinned_ids = pinned_ids.clone();
+        use_effect_with((), move |_| {
+            spawn_local(async move {
+                if let Ok(db) = TaskbarDb::open().await {
+                    let apps = db.get_pinned().await;
+                    let ids: Vec<String> = apps.iter().map(|a| a.id.clone()).collect();
+                    pinned_ids.set(ids);
+                    pinned_apps.set(pinned_to_display(&apps));
+                }
+            });
+            || ()
+        });
+    }
+
     let all_apps = get_all_apps();
-    let mobile_dock_apps = get_mobile_dock_apps();
+    let mobile_dock_apps = get_mobile_dock_apps(&pinned_apps);
 
     // App drawer/start menu state
     let drawer_open = use_state(|| false);
@@ -128,11 +152,106 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let drawer_offset = use_state(|| 0.0f64);
     let touch_start_y = use_state(|| 0.0f64);
 
+    // Context menu state
+    let context_menu = use_state(ContextMenuState::default);
+
     // Toggle start menu (desktop)
     let toggle_start_menu = {
         let drawer_open = drawer_open.clone();
+        let context_menu = context_menu.clone();
         Callback::from(move |_| {
+            context_menu.set(ContextMenuState::default());
             drawer_open.set(!*drawer_open);
+        })
+    };
+
+    // Handle right-click on app in start menu
+    let on_app_context_menu = {
+        let context_menu = context_menu.clone();
+        let pinned_ids = pinned_ids.clone();
+        Callback::from(move |(e, app_id): (MouseEvent, String)| {
+            e.prevent_default();
+            let is_pinned = pinned_ids.contains(&app_id);
+            context_menu.set(ContextMenuState {
+                visible: true,
+                x: e.client_x(),
+                y: e.client_y(),
+                app_id,
+                is_pinned,
+            });
+        })
+    };
+
+    // Handle right-click on taskbar item (to unpin)
+    let on_taskbar_context_menu = {
+        let context_menu = context_menu.clone();
+        Callback::from(move |(e, app_id): (MouseEvent, String)| {
+            e.prevent_default();
+            context_menu.set(ContextMenuState {
+                visible: true,
+                x: e.client_x(),
+                y: e.client_y(),
+                app_id,
+                is_pinned: true, // Taskbar items are always pinned
+            });
+        })
+    };
+
+    // Pin app handler
+    let on_pin_app = {
+        let context_menu = context_menu.clone();
+        let pinned_apps = pinned_apps.clone();
+        let pinned_ids = pinned_ids.clone();
+        Callback::from(move |_| {
+            let app_id = context_menu.app_id.clone();
+            let pinned_apps = pinned_apps.clone();
+            let pinned_ids = pinned_ids.clone();
+            let context_menu = context_menu.clone();
+
+            spawn_local(async move {
+                if let Ok(db) = TaskbarDb::open().await {
+                    if db.pin_app(&app_id).await.is_ok() {
+                        let apps = db.get_pinned().await;
+                        let ids: Vec<String> = apps.iter().map(|a| a.id.clone()).collect();
+                        pinned_ids.set(ids);
+                        pinned_apps.set(pinned_to_display(&apps));
+                    }
+                }
+                context_menu.set(ContextMenuState::default());
+            });
+        })
+    };
+
+    // Unpin app handler
+    let on_unpin_app = {
+        let context_menu = context_menu.clone();
+        let pinned_apps = pinned_apps.clone();
+        let pinned_ids = pinned_ids.clone();
+        Callback::from(move |_| {
+            let app_id = context_menu.app_id.clone();
+            let pinned_apps = pinned_apps.clone();
+            let pinned_ids = pinned_ids.clone();
+            let context_menu = context_menu.clone();
+
+            spawn_local(async move {
+                if let Ok(db) = TaskbarDb::open().await {
+                    if db.unpin_app(&app_id).await.is_ok() {
+                        let apps = db.get_pinned().await;
+                        let ids: Vec<String> = apps.iter().map(|a| a.id.clone()).collect();
+                        pinned_ids.set(ids);
+                        pinned_apps.set(pinned_to_display(&apps));
+                    }
+                }
+                context_menu.set(ContextMenuState::default());
+            });
+        })
+    };
+
+    // Close context menu
+    let close_context_menu = {
+        let context_menu = context_menu.clone();
+        Callback::from(move |_: MouseEvent| {
+            context_menu.set(ContextMenuState::default());
         })
     };
 
@@ -175,11 +294,11 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         })
     };
 
-    // Swipe down on drawer to close (mobile) - works anywhere in drawer
+    // Swipe down on drawer to close (mobile)
     let on_drawer_touch_start = {
         let touch_start_y = touch_start_y.clone();
         Callback::from(move |e: TouchEvent| {
-            e.prevent_default(); // Prevent browser pull-to-refresh
+            e.prevent_default();
             if let Some(touch) = e.touches().get(0) {
                 touch_start_y.set(touch.client_y() as f64);
             }
@@ -191,7 +310,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         let drawer_offset = drawer_offset.clone();
         let drawer_dragging = drawer_dragging.clone();
         Callback::from(move |e: TouchEvent| {
-            e.prevent_default(); // Prevent browser pull-to-refresh
+            e.prevent_default();
             if let Some(touch) = e.touches().get(0) {
                 let current_y = touch.client_y() as f64;
                 let delta = current_y - *touch_start_y;
@@ -220,23 +339,36 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     // Close drawer when app is clicked
     let close_drawer = {
         let drawer_open = drawer_open.clone();
+        let context_menu = context_menu.clone();
         Callback::from(move |_: ()| {
             drawer_open.set(false);
+            context_menu.set(ContextMenuState::default());
         })
     };
 
-    // Global click listener to close start menu when clicking outside (desktop)
+    // Global click listener to close menus when clicking outside
     {
         let drawer_open = drawer_open.clone();
-        use_effect_with(*drawer_open, move |is_open| {
+        let context_menu = context_menu.clone();
+        use_effect_with((*drawer_open, context_menu.visible), move |(is_open, ctx_visible)| {
             let document = web_sys::window().and_then(|w| w.document());
 
-            let closure = if *is_open {
+            let closure = if *is_open || *ctx_visible {
                 let drawer_open = drawer_open.clone();
+                let context_menu = context_menu.clone();
                 Some(Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
                     if let Some(target) = e.target() {
                         if let Some(element) = target.dyn_ref::<web_sys::Element>() {
                             if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                                // Check if click is inside context menu
+                                if let Ok(Some(ctx_menu)) = doc.query_selector(".context-menu") {
+                                    if ctx_menu.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+                                // Close context menu on outside click
+                                context_menu.set(ContextMenuState::default());
+
                                 // Check if click is inside start-menu or start-btn
                                 if let Ok(Some(start_menu)) = doc.query_selector(".start-menu") {
                                     if start_menu.contains(Some(element)) {
@@ -299,6 +431,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         String::new()
     };
 
+    // Context menu style
+    let context_menu_style = format!(
+        "position: fixed; left: {}px; top: {}px; z-index: 10000;",
+        context_menu.x, context_menu.y
+    );
+
     html! {
         <>
             // Desktop: Floating dock with start button
@@ -308,9 +446,10 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     <img class="start-logo" src="resources/img/logo_inverted_bg.webp" alt="Start" />
                 </button>
                 <div class="taskbar-separator"></div>
-                // Pinned apps
-                { for dock_apps.iter().map(|app| {
-                    let app_id = app.id.to_string();
+                // Pinned apps from DB
+                { for pinned_apps.iter().map(|app| {
+                    let app_id = app.id.clone();
+                    let app_id_ctx = app_id.clone();
                     let on_click = {
                         let on_app_click = props.on_app_click.clone();
                         let app_id = app_id.clone();
@@ -318,8 +457,14 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                             on_app_click.emit(app_id.clone());
                         })
                     };
+                    let on_context = {
+                        let on_taskbar_context_menu = on_taskbar_context_menu.clone();
+                        Callback::from(move |e: MouseEvent| {
+                            on_taskbar_context_menu.emit((e, app_id_ctx.clone()));
+                        })
+                    };
 
-                    let is_active = props.active_app.as_ref().map(|a| a == app.id).unwrap_or(false);
+                    let is_active = props.active_app.as_ref().map(|a| a == &app.id).unwrap_or(false);
                     let class = if is_active {
                         "taskbar-item active"
                     } else {
@@ -327,14 +472,14 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     };
 
                     html! {
-                        <button class={class} onclick={on_click}>
+                        <button class={class} onclick={on_click} oncontextmenu={on_context}>
                             <i class={format!("taskbar-icon {}", app.icon)}></i>
                         </button>
                     }
                 })}
             </div>
 
-            // Desktop: Custom App Launcher
+            // Desktop: Custom App Launcher (Start Menu)
             <div class={if *drawer_open { "start-menu open" } else { "start-menu" }}>
                 // Header with user info
                 <div class="start-menu-header">
@@ -361,7 +506,8 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     <div class="apps-label">{"Applications"}</div>
                     <div class="start-menu-grid">
                         { for all_apps.iter().map(|app| {
-                            let app_id = app.id.to_string();
+                            let app_id = app.id.clone();
+                            let app_id_ctx = app_id.clone();
                             let close_drawer = close_drawer.clone();
                             let on_click = {
                                 let on_app_click = props.on_app_click.clone();
@@ -371,13 +517,29 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                                     close_drawer.emit(());
                                 })
                             };
+                            let on_context = {
+                                let on_app_context_menu = on_app_context_menu.clone();
+                                Callback::from(move |e: MouseEvent| {
+                                    on_app_context_menu.emit((e, app_id_ctx.clone()));
+                                })
+                            };
+                            let is_pinned = pinned_ids.contains(&app.id);
 
                             html! {
-                                <button class="start-menu-item" onclick={on_click}>
+                                <button
+                                    class={if is_pinned { "start-menu-item pinned" } else { "start-menu-item" }}
+                                    onclick={on_click}
+                                    oncontextmenu={on_context}
+                                >
                                     <div class="app-icon-wrapper">
-                                        <i class={app.icon}></i>
+                                        <i class={app.icon.clone()}></i>
+                                        if is_pinned {
+                                            <span class="pinned-indicator" title="Angeheftet">
+                                                <i class="fa-solid fa-thumbtack"></i>
+                                            </span>
+                                        }
                                     </div>
-                                    <span>{app.label}</span>
+                                    <span>{&app.label}</span>
                                 </button>
                             }
                         })}
@@ -400,6 +562,23 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 </div>
             </div>
 
+            // Context Menu (Pin/Unpin)
+            if context_menu.visible {
+                <div class="context-menu" style={context_menu_style} onclick={close_context_menu}>
+                    if context_menu.is_pinned {
+                        <button class="context-menu-item" onclick={on_unpin_app}>
+                            <i class="fa-solid fa-thumbtack"></i>
+                            <span>{"Von Taskbar lösen"}</span>
+                        </button>
+                    } else {
+                        <button class="context-menu-item" onclick={on_pin_app}>
+                            <i class="fa-solid fa-thumbtack"></i>
+                            <span>{"An Taskbar anheften"}</span>
+                        </button>
+                    }
+                </div>
+            }
+
             // Mobile: Floating icons at bottom
             <div
                 class="mobile-dock"
@@ -408,7 +587,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 ontouchend={on_dock_touch_end}
             >
                 { for mobile_dock_apps.iter().map(|app| {
-                    let app_id = app.id.to_string();
+                    let app_id = app.id.clone();
                     let on_click = {
                         let on_app_click = props.on_app_click.clone();
                         let app_id = app_id.clone();
@@ -419,13 +598,13 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
                     html! {
                         <button class="dock-item" onclick={on_click}>
-                            <i class={app.icon}></i>
+                            <i class={app.icon.clone()}></i>
                         </button>
                     }
                 })}
             </div>
 
-            // Mobile: App Drawer (swipe up to open, swipe down anywhere to close)
+            // Mobile: App Drawer
             <div
                 class={drawer_class}
                 style={drawer_style}
@@ -441,7 +620,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
                 <div class="app-drawer-grid">
                     { for all_apps.iter().map(|app| {
-                        let app_id = app.id.to_string();
+                        let app_id = app.id.clone();
                         let close_drawer = close_drawer.clone();
                         let on_click = {
                             let on_app_click = props.on_app_click.clone();
@@ -455,9 +634,9 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                         html! {
                             <button class="app-icon" onclick={on_click}>
                                 <div class="app-icon-bg">
-                                    <i class={app.icon}></i>
+                                    <i class={app.icon.clone()}></i>
                                 </div>
-                                <span class="app-icon-label">{app.label}</span>
+                                <span class="app-icon-label">{&app.label}</span>
                             </button>
                         }
                     })}

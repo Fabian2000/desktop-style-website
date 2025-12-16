@@ -1,0 +1,16 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "version": "1.0.0",
+  "description": "System Terminal for FabiScOS",
+  "author": "FabiScOS",
+  "icon": "icon.png",
+  "entry": "main.py",
+  "window": {
+    "width": 600,
+    "height": 400,
+    "resizable": true,
+    "min_width": 300,
+    "min_height": 200
+  }
+}

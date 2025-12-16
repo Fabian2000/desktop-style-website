@@ -1098,7 +1098,12 @@
 .start-menu .start-menu-item:active {
   transform: translateY(0);
 }
+.start-menu .start-menu-item.pinned .app-icon-wrapper {
+  background: linear-gradient(145deg, rgba(85, 85, 255, 0.2), rgba(85, 85, 255, 0.1));
+  border-color: rgba(85, 85, 255, 0.3);
+}
 .start-menu .start-menu-item .app-icon-wrapper {
+  position: relative;
   width: 48px;
   height: 48px;
   display: flex;
@@ -1111,6 +1116,23 @@
 }
 .start-menu .start-menu-item .app-icon-wrapper i {
   font-size: 22px;
+  color: #ffffff;
+}
+.start-menu .start-menu-item .app-icon-wrapper .pinned-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  background: #5555ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(17, 17, 17, 0.95);
+}
+.start-menu .start-menu-item .app-icon-wrapper .pinned-indicator i {
+  font-size: 8px;
   color: #ffffff;
 }
 .start-menu .start-menu-item span {
@@ -1299,6 +1321,45 @@
   white-space: nowrap;
 }
 
+.context-menu {
+  background: rgba(17, 17, 17, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  min-width: 180px;
+  z-index: 10000;
+}
+.context-menu .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-align: left;
+}
+.context-menu .context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.context-menu .context-menu-item:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+.context-menu .context-menu-item i {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  width: 16px;
+  text-align: center;
+}
+
 .workspace {
   position: fixed;
   top: 30px;
@@ -1324,20 +1385,52 @@
 .app-window {
   position: absolute;
   background: rgba(17, 17, 17, 0.95);
-  border-radius: 30px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 300px;
+  min-height: 200px;
+}
+.app-window.maximized {
+  position: fixed !important;
+  top: 30px !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 90px !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+@media screen and (orientation: portrait) {
+  .app-window.maximized {
+    bottom: 0 !important;
+  }
+}
+.app-window.maximized .window-titlebar {
+  cursor: default;
+}
+.app-window.minimized {
+  display: none;
+}
+.app-window.mobile {
+  z-index: 50 !important;
 }
 @media screen and (orientation: portrait) {
   .app-window {
-    position: fixed;
-    top: 30px;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: fixed !important;
+    top: 30px !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+    height: auto !important;
     border-radius: 0;
     border: none;
   }
@@ -1347,12 +1440,13 @@
   align-items: center;
   justify-content: space-between;
   height: 40px;
-  padding: 0 15px;
-  background: rgba(34, 34, 34, 0.8);
+  padding: 0 12px;
+  background: rgba(34, 34, 34, 0.6);
   cursor: grab;
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
+  flex-shrink: 0;
 }
 .app-window .window-titlebar:active {
   cursor: grabbing;
@@ -1360,76 +1454,198 @@
 @media screen and (orientation: portrait) {
   .app-window .window-titlebar {
     cursor: default;
+    padding: 0 8px;
   }
   .app-window .window-titlebar:active {
     cursor: default;
   }
 }
 .app-window .window-titlebar .window-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  overflow: hidden;
 }
 .app-window .window-titlebar .window-title i {
-  font-size: 16px;
+  font-size: 14px;
   color: #aaaaaa;
+  flex-shrink: 0;
+}
+.app-window .window-titlebar .window-title span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .app-window .window-titlebar .window-controls {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
+}
+.app-window .window-titlebar .window-controls .window-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.app-window .window-titlebar .window-controls .window-btn i {
+  font-size: 12px;
+}
+.app-window .window-titlebar .window-controls .window-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+.app-window .window-titlebar .window-controls .window-btn.close:hover {
+  background: rgba(255, 80, 80, 0.3);
+  color: #ff6b6b;
+}
+.app-window .mobile-header {
+  display: none;
 }
 @media screen and (orientation: portrait) {
-  .app-window .window-titlebar .window-controls {
-    display: none;
+  .app-window .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    padding: 0 12px;
+    background: rgba(34, 34, 34, 0.8);
+    flex-shrink: 0;
   }
-}
-.app-window .window-titlebar .window-controls button {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.2s ease;
-}
-.app-window .window-titlebar .window-controls button:hover {
-  opacity: 0.8;
-}
-.app-window .window-titlebar .window-controls button.close {
-  background: #ff5f57;
-}
-.app-window .window-titlebar .window-controls button.minimize {
-  background: #ffbd2e;
-}
-.app-window .window-titlebar .window-controls button.maximize {
-  background: #28c840;
+  .app-window .mobile-header .mobile-back-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+  }
+  .app-window .mobile-header .mobile-back-btn i {
+    font-size: 20px;
+  }
+  .app-window .mobile-header .mobile-back-btn:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .app-window .mobile-header .mobile-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .app-window .mobile-header .mobile-title i {
+    font-size: 18px;
+    color: #aaaaaa;
+  }
+  .app-window .mobile-header .mobile-header-spacer {
+    width: 40px;
+  }
 }
 .app-window .window-content {
   flex: 1;
   overflow: auto;
-  padding: 20px;
+  background: rgba(17, 17, 17, 0.5);
   color: #ffffff;
 }
+.app-window .mobile-navbar {
+  display: none;
+}
 @media screen and (orientation: portrait) {
-  .app-window .window-content {
-    padding: 15px;
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  .app-window .mobile-navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: 48px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(17, 17, 17, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+  }
+  .app-window .mobile-navbar .nav-btn {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .app-window .mobile-navbar .nav-btn i {
+    font-size: 18px;
+  }
+  .app-window .mobile-navbar .nav-btn:active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .app-window .mobile-navbar .nav-btn.back i {
+    font-size: 20px;
+  }
+  .app-window .mobile-navbar .nav-btn.home i {
+    font-size: 14px;
+  }
+  .app-window .mobile-navbar .nav-btn.recent i {
+    font-size: 16px;
+  }
+}
+.app-window .window-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: se-resize;
+}
+.app-window .window-resize-handle::before {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+}
+.app-window .window-resize-handle:hover::before {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+@media screen and (orientation: portrait) {
+  .app-window .window-resize-handle {
+    display: none;
   }
 }
 
 .app-window {
-  animation: windowOpen 0.3s ease-out;
+  animation: windowOpen 0.2s ease-out;
 }
 .app-window.closing {
-  animation: windowClose 0.2s ease-in forwards;
+  animation: windowClose 0.15s ease-in forwards;
+}
+.app-window.maximized {
+  animation: none;
 }
 
 @keyframes windowOpen {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
@@ -1443,7 +1659,7 @@
   }
   to {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.95);
   }
 }
 .display-none {

@@ -1,4 +1,5 @@
 mod app;
+mod app_window;
 mod boot_screen;
 mod calendar_popup;
 mod lock_screen;
@@ -9,3 +10,4 @@ mod top_bar;
 mod workspace;
 
 pub use app::App;
+pub use app_window::AppWindow;

@@ -1,8 +1,10 @@
 use wasm_bindgen::prelude::*;
 
+pub mod apps;
 mod components;
 mod database;
 pub mod filesystem;
+pub mod python;
 mod utils;
 
 use components::App;

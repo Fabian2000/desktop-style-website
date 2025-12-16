@@ -20,6 +20,26 @@
         "system": true,
         "hidden": false
       }
+    },
+    {
+      "path": "/home/.system/apps/terminal/metadata.json",
+      "server_path": "/resources/apps/terminal/metadata.json",
+      "hash": "terminal_meta_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/terminal/main.py",
+      "server_path": "/resources/apps/terminal/main.py",
+      "hash": "terminal_main_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
     }
   ]
 }

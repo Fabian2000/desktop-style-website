@@ -41,6 +41,10 @@ pub struct OpenWindow {
     pub height: u32,
     pub z_index: u32,
     pub minimized: bool,
+    /// Python code to execute (loaded from VFS)
+    pub python_code: Option<String>,
+    /// App's base path in VFS
+    pub app_path: String,
 }
 
 #[function_component(App)]
@@ -82,6 +86,22 @@ pub fn app() -> Html {
                             web_sys::console::log_1(
                                 &format!("VFS: Cleaned {} old trash files", result.trash_cleaned).into(),
                             );
+                        }
+
+                        // Refresh the JavaScript VFS cache after Rust VFS init
+                        // This ensures the JS bridge has all the directories that were just created
+                        if let Some(window) = web_sys::window() {
+                            if let Ok(vfs_sync) = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("__vfsSync")) {
+                                if let Ok(refresh_fn) = js_sys::Reflect::get(&vfs_sync, &wasm_bindgen::JsValue::from_str("refresh")) {
+                                    if let Some(func) = refresh_fn.dyn_ref::<js_sys::Function>() {
+                                        // refresh() returns a Promise, we need to await it
+                                        if let Ok(promise) = func.call0(&vfs_sync) {
+                                            let _ = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await;
+                                            web_sys::console::log_1(&"[VFS] JavaScript cache refreshed".into());
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     Err(e) => {
@@ -176,23 +196,61 @@ pub fn app() -> Html {
                 let z = *next_z_index;
                 next_z_index.set(z + 1);
 
-                // Default window size (will be overridden by metadata later)
-                let window = OpenWindow {
-                    id: window_id.clone(),
-                    app_id: app_id.clone(),
-                    title: app_id.clone(), // Will be replaced by app name from registry
-                    x: 100 + (z as i32 % 10) * 30,
-                    y: 50 + (z as i32 % 10) * 30,
-                    width: 600,
-                    height: 400,
-                    z_index: z,
-                    minimized: false,
+                // Determine app path based on app type
+                // System apps: /home/.system/apps/{app_id}/
+                // User apps: /home/apps/{app_id}/
+                let app_path = if matches!(app_id.as_str(), "terminal" | "files" | "settings") {
+                    format!("/home/.system/apps/{}/", app_id)
+                } else {
+                    format!("/home/apps/{}/", app_id)
                 };
 
-                let mut windows = (*open_windows).clone();
-                windows.insert(window_id.clone(), window);
-                open_windows.set(windows);
-                active_window.set(Some(window_id));
+                // Load Python code asynchronously, then create window
+                let open_windows_async = open_windows.clone();
+                let active_window_async = active_window.clone();
+                let window_id_async = window_id.clone();
+                let app_id_async = app_id.clone();
+                let app_path_async = app_path.clone();
+                let z_async = z;
+
+                spawn_local(async move {
+                    // Try to read main.py from app directory
+                    let main_py_path = format!("{}main.py", app_path_async);
+                    web_sys::console::log_1(&format!("[App] Loading Python code from: {}", main_py_path).into());
+
+                    let python_code = match filesystem::vfs::read_to_string(&main_py_path).await {
+                        Ok(code) => {
+                            web_sys::console::log_1(&format!("[App] Loaded {} bytes of Python code", code.len()).into());
+                            Some(code)
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("[App] Could not load {}: {}", main_py_path, e).into()
+                            );
+                            None
+                        }
+                    };
+
+                    // Create window with code already loaded
+                    let window = OpenWindow {
+                        id: window_id_async.clone(),
+                        app_id: app_id_async.clone(),
+                        title: app_id_async.clone(),
+                        x: 100 + (z_async as i32 % 10) * 30,
+                        y: 50 + (z_async as i32 % 10) * 30,
+                        width: 600,
+                        height: 400,
+                        z_index: z_async,
+                        minimized: false,
+                        python_code,
+                        app_path: app_path_async,
+                    };
+
+                    let mut windows = (*open_windows_async).clone();
+                    windows.insert(window_id_async.clone(), window);
+                    open_windows_async.set(windows);
+                    active_window_async.set(Some(window_id_async));
+                });
             }
         })
     };
@@ -302,7 +360,9 @@ pub fn app() -> Html {
             <Workspace visible={show_desktop && !is_offline && !is_booting} />
             // Windows rendered OUTSIDE workspace so they have their own stacking context
             // This allows mobile windows to appear above the mobile-dock
-            { for windows_list.iter().filter(|w| !w.minimized).map(|window| {
+            // Note: We render ALL windows (including minimized) to preserve their state
+            // Minimized windows use CSS display:none in app_window.rs
+            { for windows_list.iter().map(|window| {
                 let on_close = {
                     let on_window_close = on_window_close.clone();
                     let window_id = window.id.clone();
@@ -330,6 +390,9 @@ pub fn app() -> Html {
                         width={window.width}
                         height={window.height}
                         z_index={window.z_index}
+                        python_code={window.python_code.clone()}
+                        app_path={window.app_path.clone()}
+                        minimized={window.minimized}
                         on_close={on_close}
                         on_focus={on_focus}
                         on_minimize={on_minimize}

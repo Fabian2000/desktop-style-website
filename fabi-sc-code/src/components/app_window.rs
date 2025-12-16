@@ -6,11 +6,15 @@
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use web_sys::MouseEvent;
+use web_sys::{MouseEvent, KeyboardEvent, HtmlInputElement};
 use yew::prelude::*;
+use std::rc::Rc;
+use std::cell::RefCell;
+
+use crate::python::runtime::{PythonRuntime, AppExecResult};
 
 /// Window state for minimize/maximize
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum WindowState {
     Normal,
     Minimized,
@@ -32,6 +36,15 @@ pub struct AppWindowProps {
     pub height: u32,
     #[prop_or(100)]
     pub z_index: u32,
+    /// Python code to execute (loaded from VFS)
+    #[prop_or_default]
+    pub python_code: Option<String>,
+    /// App's base path for VFS operations
+    #[prop_or_default]
+    pub app_path: String,
+    /// Whether window is minimized (controlled by parent)
+    #[prop_or(false)]
+    pub minimized: bool,
     #[prop_or_default]
     pub on_close: Callback<()>,
     #[prop_or_default]
@@ -71,6 +84,176 @@ pub fn app_window(props: &AppWindowProps) -> Html {
 
     // Store pre-maximize position/size for restore
     let pre_maximize = use_state(|| None::<(i32, i32, u32, u32)>);
+
+    // Python Runtime state
+    let app_content = use_state(|| None::<String>);
+    let app_error = use_state(|| None::<String>);
+    let runtime_title = use_state(|| None::<String>);
+
+    // Store the input value for re-execution (when Enter is pressed)
+    let pending_input = use_state(|| None::<String>);
+
+    // Trigger for re-running the app (incremented on input submit)
+    let run_counter = use_state(|| 0u32);
+
+    // Helper function to run Python code with optional input
+    fn run_python_app(
+        code: &str,
+        input: Option<&str>,
+        window_id: &str,
+        app_id: &str,
+        app_path: &str,
+        app_content: &UseStateHandle<Option<String>>,
+        app_error: &UseStateHandle<Option<String>>,
+        runtime_title: &UseStateHandle<Option<String>>,
+    ) {
+        web_sys::console::log_1(&format!("[Python] Running app: {} ({})", app_id, window_id).into());
+
+        // Create Python runtime for this app
+        let runtime = PythonRuntime::new(
+            window_id.to_string(),
+            app_id.to_string(),
+            app_path.to_string(),
+        );
+
+        // Prepare code with input injection if provided
+        let full_code = if let Some(input_val) = input {
+            // Inject __input__ variable and call on_input if defined
+            format!(
+                r#"__input__ = "{}"
+{}
+if '__input__' in dir() and __input__ and 'on_input' in dir():
+    on_input(__input__)
+"#,
+                input_val.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n"),
+                code
+            )
+        } else {
+            code.to_string()
+        };
+
+        // Execute the code
+        match runtime.run(&full_code) {
+            AppExecResult::Success => {
+                web_sys::console::log_1(&"[Python] Execution successful".into());
+                // Get the UI HTML from the runtime
+                if let Some(html) = runtime.take_pending_ui() {
+                    web_sys::console::log_1(&format!("[Python] UI HTML: {} chars", html.len()).into());
+                    app_content.set(Some(html));
+                } else {
+                    web_sys::console::warn_1(&"[Python] No UI output from app".into());
+                }
+                // Get any title change
+                let state = runtime.state();
+                let title = state.borrow().title.clone();
+                if !title.is_empty() {
+                    runtime_title.set(Some(title));
+                }
+                // Clear any previous error
+                app_error.set(None);
+            }
+            AppExecResult::Error(err) => {
+                web_sys::console::error_1(&format!("[Python] Error: {}", err).into());
+                app_error.set(Some(err));
+            }
+            AppExecResult::InstructionLimit => {
+                web_sys::console::error_1(&"[Python] Instruction limit reached".into());
+                app_error.set(Some("App stopped (instruction limit reached)".to_string()));
+            }
+        }
+    }
+
+    // Run Python code when it's provided or when input is submitted
+    {
+        let app_content = app_content.clone();
+        let app_error = app_error.clone();
+        let runtime_title = runtime_title.clone();
+        let python_code = props.python_code.clone();
+        let window_id = props.window_id.clone();
+        let app_id = props.app_id.clone();
+        let app_path = props.app_path.clone();
+        let pending_input = pending_input.clone();
+        let run_counter_val = *run_counter;
+
+        use_effect_with((python_code.clone(), run_counter_val), move |(code, _counter)| {
+            if let Some(code) = code {
+                let input = (*pending_input).clone();
+                run_python_app(
+                    code,
+                    input.as_deref(),
+                    &window_id,
+                    &app_id,
+                    &app_path,
+                    &app_content,
+                    &app_error,
+                    &runtime_title,
+                );
+            } else {
+                web_sys::console::log_1(&format!("[Python] No code provided for {}", app_id).into());
+            }
+            || ()
+        });
+    }
+
+    // Keydown event listener for Enter on inputs
+    let window_ref = use_node_ref();
+    {
+        let window_ref_clone = window_ref.clone();
+        let pending_input = pending_input.clone();
+        let run_counter = run_counter.clone();
+
+        use_effect_with(window_ref.clone(), move |_| {
+            let closure: Rc<RefCell<Option<Closure<dyn Fn(KeyboardEvent)>>>> = Rc::new(RefCell::new(None));
+            let closure_clone = closure.clone();
+            let window_ref_for_cleanup = window_ref_clone.clone();
+
+            if let Some(element) = window_ref_clone.cast::<web_sys::HtmlElement>() {
+                let pending_input = pending_input.clone();
+                let run_counter = run_counter.clone();
+
+                let keydown_closure = Closure::wrap(Box::new(move |e: KeyboardEvent| {
+                    // Check if Enter was pressed
+                    if e.key() == "Enter" {
+                        // Check if the target is an input with data-on-submit
+                        if let Some(target) = e.target() {
+                            if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
+                                if input.get_attribute("data-on-submit").is_some() {
+                                    e.prevent_default();
+                                    let value = input.value();
+                                    web_sys::console::log_1(&format!("[Input] Enter pressed, value: {}", value).into());
+
+                                    // Clear the input
+                                    input.set_value("");
+
+                                    // Set the pending input and trigger re-run
+                                    pending_input.set(Some(value));
+                                    run_counter.set(*run_counter + 1);
+                                }
+                            }
+                        }
+                    }
+                }) as Box<dyn Fn(KeyboardEvent)>);
+
+                let _ = element.add_event_listener_with_callback(
+                    "keydown",
+                    keydown_closure.as_ref().unchecked_ref(),
+                );
+
+                *closure_clone.borrow_mut() = Some(keydown_closure);
+            }
+
+            move || {
+                if let Some(closure) = closure.borrow_mut().take() {
+                    if let Some(element) = window_ref_for_cleanup.cast::<web_sys::HtmlElement>() {
+                        let _ = element.remove_event_listener_with_callback(
+                            "keydown",
+                            closure.as_ref().unchecked_ref(),
+                        );
+                    }
+                }
+            }
+        });
+    }
 
     // Handle drag start (desktop only, not when maximized)
     let on_titlebar_mousedown = {
@@ -184,13 +367,40 @@ pub fn app_window(props: &AppWindowProps) -> Html {
         );
     }
 
-    // Minimize button handler
-    let on_minimize_click = {
+    // Track if window was maximized before minimizing
+    let was_maximized_before_minimize = use_state(|| false);
+
+    // Sync window_state with external minimized prop
+    {
         let window_state = window_state.clone();
+        let was_maximized = was_maximized_before_minimize.clone();
+        let minimized_prop = props.minimized;
+        use_effect_with(minimized_prop, move |&is_minimized| {
+            if is_minimized {
+                // Being minimized from parent - remember current state
+                if *window_state == WindowState::Maximized {
+                    was_maximized.set(true);
+                }
+                window_state.set(WindowState::Minimized);
+            } else if *window_state == WindowState::Minimized {
+                // Being restored - check if we were maximized before
+                if *was_maximized {
+                    window_state.set(WindowState::Maximized);
+                    was_maximized.set(false); // Reset for next time
+                } else {
+                    window_state.set(WindowState::Normal);
+                }
+            }
+            || ()
+        });
+    }
+
+    // Minimize button handler - just emit callback, let parent handle state
+    // The use_effect_with(minimized_prop) will update window_state when parent changes props.minimized
+    let on_minimize_click = {
         let on_minimize = props.on_minimize.clone();
         Callback::from(move |e: MouseEvent| {
             e.stop_propagation();
-            window_state.set(WindowState::Minimized);
             on_minimize.emit(());
         })
     };
@@ -363,6 +573,7 @@ pub fn app_window(props: &AppWindowProps) -> Html {
 
     html! {
         <div
+            ref={window_ref}
             class={window_class}
             style={window_style}
             onmousedown={on_window_mousedown}
@@ -411,12 +622,31 @@ pub fn app_window(props: &AppWindowProps) -> Html {
 
             // Content area
             <div class="window-content">
-                // Placeholder content - will be replaced with Python app output
-                <div style="color: #888; text-align: center; padding-top: 50px;">
-                    <i class={format!("{} fa-3x", icon_class)} style="margin-bottom: 20px; display: block;"></i>
-                    <p>{format!("App: {}", props.app_id)}</p>
-                    <p style="font-size: 12px; color: #666;">{"Python Runtime wird geladen..."}</p>
-                </div>
+                if let Some(error) = (*app_error).clone() {
+                    // Show Python error
+                    <div class="app-error" style="padding: 20px; text-align: center;">
+                        <i class="fa-solid fa-triangle-exclamation fa-2x" style="color: #ff6b6b; margin-bottom: 16px;"></i>
+                        <h3 style="color: #ff6b6b; margin-bottom: 12px;">{"App Error"}</h3>
+                        <pre style="text-align: left; font-size: 12px; background: rgba(255,107,107,0.1); padding: 12px; border-radius: 8px; overflow: auto; max-height: 300px; white-space: pre-wrap; color: #ccc;">{error}</pre>
+                    </div>
+                } else if let Some(ref content) = *app_content {
+                    // Render Python app UI (inject HTML directly)
+                    { Html::from_html_unchecked(AttrValue::from(format!(r#"<div class="app-ui">{}</div>"#, content))) }
+                } else if props.python_code.is_none() {
+                    // No code yet - show loading
+                    <div style="color: #888; text-align: center; padding-top: 50px;">
+                        <i class={format!("{} fa-3x", icon_class)} style="margin-bottom: 20px; display: block;"></i>
+                        <p>{format!("App: {}", props.app_id)}</p>
+                        <p style="font-size: 12px; color: #666;">{"Loading..."}</p>
+                    </div>
+                } else {
+                    // Code provided but no UI output
+                    <div style="color: #888; text-align: center; padding-top: 50px;">
+                        <i class={format!("{} fa-3x", icon_class)} style="margin-bottom: 20px; display: block;"></i>
+                        <p>{format!("App: {}", props.app_id)}</p>
+                        <p style="font-size: 12px; color: #666;">{"App running (no UI output)"}</p>
+                    </div>
+                }
             </div>
 
 

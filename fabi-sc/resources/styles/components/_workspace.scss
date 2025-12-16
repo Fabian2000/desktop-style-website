@@ -169,9 +169,19 @@
     // Window content area
     .window-content {
         flex: 1;
+        display: flex;
+        flex-direction: column;
         overflow: auto;
         background: rgba($color-background-dark, 0.5);
         color: $color-text;
+
+        // App UI container must fill the entire content area
+        .app-ui {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; // Important for nested flex containers
+        }
     }
 
     // Mobile navigation bar (Android-style buttons at bottom)

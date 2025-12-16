@@ -34,7 +34,7 @@
     {
       "path": "/home/.system/apps/terminal/main.py",
       "server_path": "/resources/apps/terminal/main.py",
-      "hash": "terminal_main_v1",
+      "hash": "terminal_main_v9",
       "permissions": {
         "readonly": true,
         "system": true,

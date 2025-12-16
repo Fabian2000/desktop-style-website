@@ -10,7 +10,7 @@ use crate::database::{PinnedApp, TaskbarDb};
 #[derive(Clone, PartialEq)]
 pub struct AppDisplayInfo {
     pub id: String,
-    pub icon: String,
+    pub icon: String,  // FontAwesome class OR image path (starts with /)
     pub label: String,
 }
 
@@ -21,6 +21,11 @@ impl AppDisplayInfo {
             icon: icon.to_string(),
             label: label.to_string(),
         }
+    }
+
+    /// Check if icon is an image path (starts with /)
+    pub fn is_image_icon(&self) -> bool {
+        self.icon.starts_with('/')
     }
 }
 
@@ -35,10 +40,10 @@ pub struct TaskbarProps {
     pub on_app_click: Callback<String>,
 }
 
-/// Get icon class for an app ID
+/// Get icon class or path for an app ID
 fn get_app_icon(app_id: &str) -> &'static str {
     match app_id {
-        "terminal" => "fa-solid fa-terminal",
+        "terminal" => "/resources/apps/terminal/icon.png",
         "files" => "fa-solid fa-folder",
         "browser" => "fa-solid fa-globe",
         "settings" => "fa-solid fa-gear",
@@ -70,7 +75,7 @@ fn get_all_apps() -> Vec<AppDisplayInfo> {
     vec![
         AppDisplayInfo::new("browser", "fa-solid fa-globe", "Browser"),
         AppDisplayInfo::new("files", "fa-solid fa-folder", "Files"),
-        AppDisplayInfo::new("terminal", "fa-solid fa-terminal", "Terminal"),
+        AppDisplayInfo::new("terminal", "/resources/apps/terminal/icon.png", "Terminal"),
         AppDisplayInfo::new("settings", "fa-solid fa-gear", "Settings"),
         AppDisplayInfo::new("info", "fa-solid fa-circle-info", "About"),
         AppDisplayInfo::new("gallery", "fa-solid fa-images", "Gallery"),

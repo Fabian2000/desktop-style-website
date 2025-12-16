@@ -117,6 +117,7 @@ async fn create_initial_structure() -> Result<(), VfsError> {
         ("/home/.system/wallpapers", Permissions::system_hidden()),
         ("/home/.system/default_apps", Permissions::system_hidden()),
         ("/home/.system/templates", Permissions::system_hidden()),
+        ("/home/apps", Permissions::default()), // User apps directory
     ];
 
     for (dir_path, permissions) in directories {
@@ -142,6 +143,8 @@ async fn sync_system_files() -> Result<SyncResult, VfsError> {
         }
     };
 
+    web_sys::console::log_1(&format!("[VFS] Syncing {} system files", manifest.files.len()).into());
+
     for file in manifest.files {
         let normalized_path = path::normalize(&file.path);
 
@@ -150,6 +153,7 @@ async fn sync_system_files() -> Result<SyncResult, VfsError> {
         let file_exists = vfs::exists(&normalized_path).await?;
 
         if current_hash != file.hash || !file_exists {
+            web_sys::console::log_1(&format!("[VFS] Fetching: {} -> {}", file.server_path, normalized_path).into());
             // Fetch file from server
             match fetch_file(&file.server_path).await {
                 Ok(content) => {
@@ -167,6 +171,8 @@ async fn sync_system_files() -> Result<SyncResult, VfsError> {
                     // Update version hash
                     vfs::set_system_version(&normalized_path, &file.hash).await?;
 
+                    web_sys::console::log_1(&format!("[VFS] Written: {} ({} bytes)", normalized_path, content.len()).into());
+
                     if file_exists {
                         result.updated += 1;
                     } else {
@@ -174,8 +180,8 @@ async fn sync_system_files() -> Result<SyncResult, VfsError> {
                     }
                 }
                 Err(e) => {
-                    web_sys::console::warn_1(
-                        &format!("Could not fetch system file {}: {:?}", file.server_path, e).into(),
+                    web_sys::console::error_1(
+                        &format!("[VFS] Could not fetch system file {}: {:?}", file.server_path, e).into(),
                     );
                 }
             }

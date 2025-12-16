@@ -240,6 +240,13 @@ def on_input(value):
         execute(value)
     render()
 
+def on_back():
+    """Called when mobile back button is pressed"""
+    # Terminal has no navigation, so back = close app
+    print("on_back() called, calling window.close()...")
+    window.close()
+    print("window.close() finished")
+
 def render():
     """Render the terminal UI"""
     global output_lines

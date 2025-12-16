@@ -70,6 +70,7 @@
             // ================================================================
             // VFS Sync Bridge - Provides synchronous VFS access for Python
             // Uses an in-memory cache that syncs with IndexedDB
+            // MUST use same DB as Rust VFS: "filesystem" with stores: nodes, content
             // ================================================================
             window.__vfsSync = {
                 // In-memory cache: path -> { type: 'file'|'dir', content?: string, children?: Map }
@@ -77,22 +78,27 @@
                 _db: null,
                 _initialized: false,
 
-                // Initialize from IndexedDB
+                // Initialize from IndexedDB - same DB as Rust VFS
                 async init() {
                     if (this._initialized) return;
 
                     try {
                         this._db = await new Promise((resolve, reject) => {
-                            const request = indexedDB.open('fabiscos_vfs', 1);
+                            // Use same DB name as Rust VFS: "filesystem"
+                            const request = indexedDB.open('filesystem', 1);
                             request.onerror = () => reject(request.error);
                             request.onsuccess = () => resolve(request.result);
                             request.onupgradeneeded = (e) => {
                                 const db = e.target.result;
+                                // Create stores if needed (same as Rust VFS)
                                 if (!db.objectStoreNames.contains('nodes')) {
-                                    db.createObjectStore('nodes', { keyPath: 'path' });
+                                    db.createObjectStore('nodes');
                                 }
                                 if (!db.objectStoreNames.contains('content')) {
-                                    db.createObjectStore('content', { keyPath: 'path' });
+                                    db.createObjectStore('content');
+                                }
+                                if (!db.objectStoreNames.contains('system_versions')) {
+                                    db.createObjectStore('system_versions');
                                 }
                             };
                         });
@@ -108,7 +114,7 @@
                 async _loadCache() {
                     if (!this._db) return;
 
-                    const tx = this._db.transaction(['nodes', 'content'], 'readonly');
+                    const tx = this._db.transaction(['nodes'], 'readonly');
                     const nodes = await new Promise((resolve, reject) => {
                         const request = tx.objectStore('nodes').getAll();
                         request.onsuccess = () => resolve(request.result || []);
@@ -117,8 +123,15 @@
 
                     this._cache.clear();
                     for (const node of nodes) {
+                        // Rust VFS stores file_type as object: { File: null } or { Directory: null }
+                        let type = 'file';
+                        if (node.file_type && typeof node.file_type === 'object') {
+                            if ('Directory' in node.file_type) type = 'directory';
+                        } else if (node.file_type === 'Directory') {
+                            type = 'directory';
+                        }
                         this._cache.set(node.path, {
-                            type: node.file_type === 'Directory' ? 'directory' : 'file',
+                            type: type,
                             name: node.name,
                             permissions: node.permissions
                         });
@@ -211,20 +224,29 @@
                 },
 
                 // Async helpers for IndexedDB persistence
+                // Format matches Rust VFS FileNode structure
                 async _persistNode(path, fileType, content) {
                     if (!this._db) return;
                     const tx = this._db.transaction(['nodes', 'content'], 'readwrite');
-                    tx.objectStore('nodes').put({
+                    // Rust VFS stores file_type as { File: null } or { Directory: null }
+                    const fileTypeObj = fileType === 'Directory' ? { Directory: null } : { File: null };
+                    const node = {
                         path: path,
                         name: path.split('/').pop(),
-                        file_type: fileType,
+                        file_type: fileTypeObj,
                         permissions: { readonly: false, system: false, hidden: false },
                         created: Date.now(),
                         modified: Date.now(),
-                        size: content ? content.length : 0
-                    });
+                        size: content ? content.length : 0,
+                        mime_type: null
+                    };
+                    // Rust VFS uses path as key (put_with_key)
+                    tx.objectStore('nodes').put(node, path);
                     if (content !== null) {
-                        tx.objectStore('content').put({ path: path, data: content });
+                        // Rust VFS stores content as ArrayBuffer directly with path as key
+                        const encoder = new TextEncoder();
+                        const buffer = encoder.encode(content).buffer;
+                        tx.objectStore('content').put(buffer, path);
                     }
                 },
 
@@ -236,6 +258,7 @@
                 },
 
                 // Load file content from IndexedDB into cache
+                // Rust VFS stores content as ArrayBuffer directly (not wrapped in object)
                 async loadContent(path) {
                     if (!this._db) return null;
                     const tx = this._db.transaction('content', 'readonly');
@@ -244,14 +267,21 @@
                         request.onsuccess = () => resolve(request.result);
                         request.onerror = () => resolve(null);
                     });
-                    if (result && result.data) {
+                    if (result) {
                         const entry = this._cache.get(path);
                         if (entry) {
-                            // Convert Uint8Array to string if needed
-                            if (result.data instanceof Uint8Array) {
-                                entry.content = new TextDecoder().decode(result.data);
-                            } else {
-                                entry.content = result.data;
+                            // Rust VFS stores content as ArrayBuffer directly
+                            if (result instanceof ArrayBuffer) {
+                                entry.content = new TextDecoder().decode(result);
+                            } else if (result instanceof Uint8Array) {
+                                entry.content = new TextDecoder().decode(result);
+                            } else if (typeof result === 'string') {
+                                entry.content = result;
+                            } else if (result.data) {
+                                // Fallback for old format
+                                entry.content = result.data instanceof Uint8Array
+                                    ? new TextDecoder().decode(result.data)
+                                    : result.data;
                             }
                         }
                         return entry?.content;

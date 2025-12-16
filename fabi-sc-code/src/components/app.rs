@@ -378,6 +378,13 @@ pub fn app() -> Html {
                     let window_id = window.id.clone();
                     Callback::from(move |_| on_window_minimize.emit(window_id.clone()))
                 };
+                // Back button: for apps without internal navigation, close the app
+                // In future, Python apps can handle this for internal navigation
+                let on_back = {
+                    let on_window_close = on_window_close.clone();
+                    let window_id = window.id.clone();
+                    Callback::from(move |_| on_window_close.emit(window_id.clone()))
+                };
                 let on_recents = on_show_recents.clone();
                 html! {
                     <AppWindow
@@ -396,6 +403,7 @@ pub fn app() -> Html {
                         on_close={on_close}
                         on_focus={on_focus}
                         on_minimize={on_minimize}
+                        on_back={on_back}
                         on_show_recents={on_recents}
                     />
                 }

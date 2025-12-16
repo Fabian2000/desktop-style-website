@@ -129,7 +129,44 @@ impl PythonRuntime {
 
         // Execute the code
         let result = interp.enter(|vm| {
-            // Compile the code
+            // Create a new scope
+            let scope = vm.new_scope_with_builtins();
+
+            // Setup code to redirect print() to browser console
+            let setup_code = r#"
+import sys
+import fabiscos
+
+class ConsoleWriter:
+    def write(self, text):
+        if text and text.strip():
+            fabiscos.log(text.rstrip())
+    def flush(self):
+        pass
+
+sys.stdout = ConsoleWriter()
+sys.stderr = ConsoleWriter()
+"#;
+
+            // Compile and run setup code first
+            let setup_obj = match vm.compile(
+                setup_code,
+                rustpython_compiler::Mode::Exec,
+                "<setup>".to_owned(),
+            ) {
+                Ok(code) => code,
+                Err(e) => return AppExecResult::Error(format!("Setup compilation error: {}", e)),
+            };
+
+            if let Err(exc) = vm.run_code_obj(setup_obj, scope.clone()) {
+                let mut msg = String::new();
+                if vm.write_exception(&mut msg, &exc).is_err() {
+                    msg = "Setup error".to_string();
+                }
+                return AppExecResult::Error(msg);
+            }
+
+            // Compile the app code
             let code_obj = match vm.compile(
                 code,
                 rustpython_compiler::Mode::Exec,
@@ -139,10 +176,7 @@ impl PythonRuntime {
                 Err(e) => return AppExecResult::Error(format!("Compilation error: {}", e)),
             };
 
-            // Create a new scope
-            let scope = vm.new_scope_with_builtins();
-
-            // Execute the code
+            // Execute the app code
             match vm.run_code_obj(code_obj, scope) {
                 Ok(_) => AppExecResult::Success,
                 Err(exc) => {
@@ -189,6 +223,12 @@ mod fabiscos {
     #[pyfunction]
     fn version(_vm: &VirtualMachine) -> String {
         "0.1.0".to_string()
+    }
+
+    /// Log to browser console (for debugging)
+    #[pyfunction]
+    fn log(message: String, _vm: &VirtualMachine) {
+        web_sys::console::log_1(&format!("[PyLog] {}", message).into());
     }
 }
 
@@ -623,8 +663,12 @@ mod fabiscos_window {
 
     #[pyfunction]
     fn close(_vm: &VirtualMachine) {
+        web_sys::console::log_1(&"[Python] window.close() called".into());
         if let Some(state) = get_current_state() {
             state.borrow_mut().close_requested = true;
+            web_sys::console::log_1(&"[Python] close_requested set to true".into());
+        } else {
+            web_sys::console::error_1(&"[Python] window.close(): No current state!".into());
         }
     }
 

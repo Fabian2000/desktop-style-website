@@ -8,8 +8,6 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{MouseEvent, KeyboardEvent, HtmlInputElement};
 use yew::prelude::*;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 use crate::python::runtime::{PythonRuntime, AppExecResult};
 
@@ -91,22 +89,31 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     let runtime_title = use_state(|| None::<String>);
 
     // Store the input value for re-execution (when Enter is pressed)
-    let pending_input = use_state(|| None::<String>);
+    // Using use_ref to avoid triggering re-renders when clearing
+    let pending_input = use_mut_ref(|| None::<String>);
 
-    // Trigger for re-running the app (incremented on input submit)
+    // Store whether back button was pressed (for Python on_back handler)
+    let pending_back = use_mut_ref(|| false);
+
+    // Trigger for re-running the app (incremented on input submit or back press)
+    // Using use_state for the actual trigger, plus a Cell to track the count
+    // in closures that don't have access to current state
     let run_counter = use_state(|| 0u32);
+    let run_counter_cell = use_mut_ref(|| 0u32);
 
-    // Helper function to run Python code with optional input
+    // Helper function to run Python code with optional input or back event
+    // Returns true if Python requested window close
     fn run_python_app(
         code: &str,
         input: Option<&str>,
+        back_pressed: bool,
         window_id: &str,
         app_id: &str,
         app_path: &str,
         app_content: &UseStateHandle<Option<String>>,
         app_error: &UseStateHandle<Option<String>>,
         runtime_title: &UseStateHandle<Option<String>>,
-    ) {
+    ) -> bool {
         web_sys::console::log_1(&format!("[Python] Running app: {} ({})", app_id, window_id).into());
 
         // Create Python runtime for this app
@@ -116,16 +123,34 @@ pub fn app_window(props: &AppWindowProps) -> Html {
             app_path.to_string(),
         );
 
-        // Prepare code with input injection if provided
+        // Prepare code with input/back injection if needed
         let full_code = if let Some(input_val) = input {
             // Inject __input__ variable and call on_input if defined
+            web_sys::console::log_1(&format!("[Python] Injecting input: {}", input_val).into());
             format!(
                 r#"__input__ = "{}"
 {}
 if '__input__' in dir() and __input__ and 'on_input' in dir():
+    print("[Python] Calling on_input with: " + __input__)
     on_input(__input__)
 "#,
                 input_val.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n"),
+                code
+            )
+        } else if back_pressed {
+            // Inject __back_pressed__ and call on_back if defined
+            web_sys::console::log_1(&"[Python] Injecting back_pressed event".into());
+            format!(
+                r#"__back_pressed__ = True
+{}
+if '__back_pressed__' in dir() and __back_pressed__:
+    if 'on_back' in dir():
+        print("[Python] on_back() found, calling it now...")
+        on_back()
+        print("[Python] on_back() returned")
+    else:
+        print("[Python] WARNING: on_back not defined!")
+"#,
                 code
             )
         } else {
@@ -161,26 +186,45 @@ if '__input__' in dir() and __input__ and 'on_input' in dir():
                 app_error.set(Some("App stopped (instruction limit reached)".to_string()));
             }
         }
+
+        // Return whether close was requested
+        let close_req = runtime.close_requested();
+        web_sys::console::log_1(&format!("[Python] close_requested = {}", close_req).into());
+        close_req
     }
 
-    // Run Python code when it's provided or when input is submitted
+    // Run Python code when it's provided or when input is submitted or back is pressed
+    // Using use_memo pattern to run synchronously during render (not in effect)
     {
-        let app_content = app_content.clone();
-        let app_error = app_error.clone();
-        let runtime_title = runtime_title.clone();
         let python_code = props.python_code.clone();
         let window_id = props.window_id.clone();
         let app_id = props.app_id.clone();
         let app_path = props.app_path.clone();
-        let pending_input = pending_input.clone();
         let run_counter_val = *run_counter;
 
-        use_effect_with((python_code.clone(), run_counter_val), move |(code, _counter)| {
-            if let Some(code) = code {
-                let input = (*pending_input).clone();
-                run_python_app(
+        // Track if we've run for this counter value
+        let last_run_counter = use_mut_ref(|| None::<u32>);
+
+        // Check if we need to run
+        let should_run = {
+            let last = *last_run_counter.borrow();
+            last != Some(run_counter_val)
+        };
+
+        if should_run {
+            // Update last run counter
+            *last_run_counter.borrow_mut() = Some(run_counter_val);
+
+            if let Some(code) = &python_code {
+                // Take the pending input (move it out, leaving None)
+                let input = pending_input.borrow_mut().take();
+                // Take pending back event
+                let back_pressed = std::mem::replace(&mut *pending_back.borrow_mut(), false);
+
+                let close_requested = run_python_app(
                     code,
                     input.as_deref(),
+                    back_pressed,
                     &window_id,
                     &app_id,
                     &app_path,
@@ -188,72 +232,56 @@ if '__input__' in dir() and __input__ and 'on_input' in dir():
                     &app_error,
                     &runtime_title,
                 );
+
+                // If Python requested close (via window.close()), emit the close callback
+                if close_requested {
+                    web_sys::console::log_1(&"[Python] App requested window close".into());
+                    props.on_close.emit(());
+                }
             } else {
                 web_sys::console::log_1(&format!("[Python] No code provided for {}", app_id).into());
             }
-            || ()
-        });
+        }
     }
 
-    // Keydown event listener for Enter on inputs
+    // Window node ref for rendering
     let window_ref = use_node_ref();
-    {
-        let window_ref_clone = window_ref.clone();
+
+    // Keydown handler using Yew's onkeydown callback (re-created each render)
+    let on_keydown = {
         let pending_input = pending_input.clone();
         let run_counter = run_counter.clone();
+        let run_counter_cell = run_counter_cell.clone();
+        Callback::from(move |e: KeyboardEvent| {
+            // Check if Enter was pressed
+            if e.key() == "Enter" {
+                // Check if the target is an input with data-on-submit
+                if let Some(target) = e.target() {
+                    if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
+                        if input.get_attribute("data-on-submit").is_some() {
+                            e.prevent_default();
+                            let value = input.value();
+                            web_sys::console::log_1(&format!("[Input] Enter pressed, value: {}", value).into());
 
-        use_effect_with(window_ref.clone(), move |_| {
-            let closure: Rc<RefCell<Option<Closure<dyn Fn(KeyboardEvent)>>>> = Rc::new(RefCell::new(None));
-            let closure_clone = closure.clone();
-            let window_ref_for_cleanup = window_ref_clone.clone();
+                            // Clear the input
+                            input.set_value("");
 
-            if let Some(element) = window_ref_clone.cast::<web_sys::HtmlElement>() {
-                let pending_input = pending_input.clone();
-                let run_counter = run_counter.clone();
-
-                let keydown_closure = Closure::wrap(Box::new(move |e: KeyboardEvent| {
-                    // Check if Enter was pressed
-                    if e.key() == "Enter" {
-                        // Check if the target is an input with data-on-submit
-                        if let Some(target) = e.target() {
-                            if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
-                                if input.get_attribute("data-on-submit").is_some() {
-                                    e.prevent_default();
-                                    let value = input.value();
-                                    web_sys::console::log_1(&format!("[Input] Enter pressed, value: {}", value).into());
-
-                                    // Clear the input
-                                    input.set_value("");
-
-                                    // Set the pending input and trigger re-run
-                                    pending_input.set(Some(value));
-                                    run_counter.set(*run_counter + 1);
-                                }
-                            }
+                            // Set the pending input and trigger re-run
+                            *pending_input.borrow_mut() = Some(value);
+                            // Increment counter via cell (always has current value)
+                            // then set state to trigger re-render
+                            let new_val = {
+                                let mut cell = run_counter_cell.borrow_mut();
+                                *cell = cell.wrapping_add(1);
+                                *cell
+                            };
+                            run_counter.set(new_val);
                         }
-                    }
-                }) as Box<dyn Fn(KeyboardEvent)>);
-
-                let _ = element.add_event_listener_with_callback(
-                    "keydown",
-                    keydown_closure.as_ref().unchecked_ref(),
-                );
-
-                *closure_clone.borrow_mut() = Some(keydown_closure);
-            }
-
-            move || {
-                if let Some(closure) = closure.borrow_mut().take() {
-                    if let Some(element) = window_ref_for_cleanup.cast::<web_sys::HtmlElement>() {
-                        let _ = element.remove_event_listener_with_callback(
-                            "keydown",
-                            closure.as_ref().unchecked_ref(),
-                        );
                     }
                 }
             }
-        });
-    }
+        })
+    };
 
     // Handle drag start (desktop only, not when maximized)
     let on_titlebar_mousedown = {
@@ -546,12 +574,21 @@ if '__input__' in dir() and __input__ and 'on_input' in dir():
 
     // Mobile navbar callbacks (defined outside html! macro)
     let on_back_click = {
-        let on_back = props.on_back.clone();
+        let pending_back = pending_back.clone();
+        let run_counter = run_counter.clone();
+        let run_counter_cell = run_counter_cell.clone();
         Callback::from(move |e: MouseEvent| {
             e.stop_propagation();
-            // Send back event - Python app decides what to do
-            // (navigate back in app, or do nothing if at root)
-            on_back.emit(());
+            // Set pending back event and trigger Python re-run
+            // Python's on_back() handler will decide what to do (e.g., navigate back or call window.close())
+            *pending_back.borrow_mut() = true;
+            let new_val = {
+                let mut cell = run_counter_cell.borrow_mut();
+                *cell = cell.wrapping_add(1);
+                *cell
+            };
+            run_counter.set(new_val);
+            web_sys::console::log_1(&"[Back] Back button pressed, triggering Python on_back".into());
         })
     };
 
@@ -577,6 +614,7 @@ if '__input__' in dir() and __input__ and 'on_input' in dir():
             class={window_class}
             style={window_style}
             onmousedown={on_window_mousedown}
+            onkeydown={on_keydown}
         >
             // Desktop: Title bar with window controls
             if !is_mobile_view {

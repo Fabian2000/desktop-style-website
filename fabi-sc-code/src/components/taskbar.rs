@@ -131,6 +131,9 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         use_effect_with((), move |_| {
             spawn_local(async move {
                 if let Ok(db) = TaskbarDb::open().await {
+                    // Ensure Help app is pinned (important for new users)
+                    let _ = db.ensure_help_pinned().await;
+
                     // Load pinned apps
                     let pinned = db.get_pinned().await;
                     let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();

@@ -40,6 +40,26 @@
         "system": true,
         "hidden": false
       }
+    },
+    {
+      "path": "/home/.system/apps/help/metadata.json",
+      "server_path": "/resources/apps/help/metadata.json",
+      "hash": "help_meta_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/help/main.py",
+      "server_path": "/resources/apps/help/main.py",
+      "hash": "help_main_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
     }
   ]
 }

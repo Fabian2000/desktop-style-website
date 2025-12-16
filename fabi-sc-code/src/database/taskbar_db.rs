@@ -223,6 +223,10 @@ impl TaskbarDb {
                 path: "/resources/apps/terminal/".to_string(),
                 order: 0,
             },
+            PinnedApp {
+                path: "/resources/apps/help/".to_string(),
+                order: 1,
+            },
         ]
     }
 
@@ -231,7 +235,26 @@ impl TaskbarDb {
         // Only include apps that actually exist with metadata.json
         vec![
             AvailableApp { path: "/resources/apps/terminal/".to_string() },
+            AvailableApp { path: "/resources/apps/help/".to_string() },
         ]
+    }
+
+    /// Ensure essential app (Help) is pinned for new/existing users
+    pub async fn ensure_help_pinned(&self) -> Result<(), String> {
+        let help_path = "/resources/apps/help/";
+        let mut pinned = self.get_pinned().await;
+
+        if !pinned.iter().any(|p| p.path == help_path) {
+            let order = pinned.iter().map(|a| a.order).max().unwrap_or(0) + 1;
+            pinned.push(PinnedApp {
+                path: help_path.to_string(),
+                order,
+            });
+            self.set_pinned(pinned).await?;
+            web_sys::console::log_1(&"[Taskbar] Auto-pinned Help app".into());
+        }
+
+        Ok(())
     }
 }
 

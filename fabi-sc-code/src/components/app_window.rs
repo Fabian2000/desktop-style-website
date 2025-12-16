@@ -509,35 +509,9 @@ if '__back_pressed__' in dir() and __back_pressed__:
         })
     };
 
-    // Get icon for app
-    let icon_class = match props.app_id.as_str() {
-        "terminal" => "fa-solid fa-terminal",
-        "files" => "fa-solid fa-folder",
-        "browser" => "fa-solid fa-globe",
-        "settings" => "fa-solid fa-gear",
-        "gallery" => "fa-solid fa-images",
-        "music" => "fa-solid fa-music",
-        "contacts" => "fa-solid fa-address-book",
-        "info" | "about" => "fa-solid fa-circle-info",
-        _ => "fa-solid fa-cube",
-    };
-
-    // Get title
-    let display_title = if props.title == props.app_id {
-        match props.app_id.as_str() {
-            "terminal" => "Terminal",
-            "files" => "Files",
-            "browser" => "Browser",
-            "settings" => "Settings",
-            "gallery" => "Gallery",
-            "music" => "Music",
-            "contacts" => "Contacts",
-            "info" | "about" => "About",
-            _ => &props.title,
-        }
-    } else {
-        &props.title
-    };
+    // Icon and title come from props (loaded from metadata.json)
+    let icon_class = "fa-solid fa-cube"; // Default fallback, real icon comes from taskbar
+    let display_title = &props.title;
 
     // Build classes and styles based on state
     let is_mobile_view = is_mobile();

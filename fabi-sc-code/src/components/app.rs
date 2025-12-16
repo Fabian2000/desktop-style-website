@@ -199,7 +199,7 @@ pub fn app() -> Html {
                 // Determine app path based on app type
                 // System apps: /home/.system/apps/{app_id}/
                 // User apps: /home/apps/{app_id}/
-                let app_path = if matches!(app_id.as_str(), "terminal" | "files" | "settings") {
+                let app_path = if matches!(app_id.as_str(), "terminal" | "files" | "settings" | "help") {
                     format!("/home/.system/apps/{}/", app_id)
                 } else {
                     format!("/home/apps/{}/", app_id)

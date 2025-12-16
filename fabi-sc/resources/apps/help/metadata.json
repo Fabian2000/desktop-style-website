@@ -1,0 +1,16 @@
+{
+  "id": "help",
+  "name": "Help",
+  "version": "1.0.0",
+  "description": "FabiScOS Documentation & Programming Guide",
+  "author": "FabiScOS",
+  "icon": "icon.png",
+  "entry": "main.py",
+  "window": {
+    "width": 700,
+    "height": 500,
+    "resizable": true,
+    "min_width": 400,
+    "min_height": 300
+  }
+}

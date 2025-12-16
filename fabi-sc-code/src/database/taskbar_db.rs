@@ -2,23 +2,78 @@
 //!
 //! Stores the user's pinned apps in IndexedDB.
 //! Maximum 10 pinned apps allowed.
+//!
+//! Apps are stored by path (e.g., "/resources/apps/terminal/")
+//! and metadata is loaded from {path}metadata.json
 
 use super::IndexedDb;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsValue;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 
 const DB_NAME: &str = "taskbar";
 const STORE_NAME: &str = "pinned";
 const PINNED_KEY: &str = "pinned_apps";
+const ALL_APPS_KEY: &str = "all_apps";
 const MAX_PINNED: usize = 10;
 
-/// A pinned app entry
+/// App metadata loaded from metadata.json
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppMetadata {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub author: String,
+    pub icon: String,
+    #[serde(default = "default_entry")]
+    pub entry: String,
+    #[serde(default)]
+    pub window: WindowConfig,
+}
+
+fn default_entry() -> String {
+    "main.py".to_string()
+}
+
+/// Window configuration from metadata
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct WindowConfig {
+    #[serde(default = "default_width")]
+    pub width: u32,
+    #[serde(default = "default_height")]
+    pub height: u32,
+    #[serde(default = "default_true")]
+    pub resizable: bool,
+    #[serde(default = "default_min_width")]
+    pub min_width: u32,
+    #[serde(default = "default_min_height")]
+    pub min_height: u32,
+}
+
+fn default_width() -> u32 { 600 }
+fn default_height() -> u32 { 400 }
+fn default_true() -> bool { true }
+fn default_min_width() -> u32 { 200 }
+fn default_min_height() -> u32 { 150 }
+
+/// A pinned app entry - stores path to app directory
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PinnedApp {
-    /// App ID (e.g., "terminal", "files")
-    pub id: String,
+    /// App path (e.g., "/resources/apps/terminal/")
+    pub path: String,
     /// Display order (0 = first)
     pub order: u32,
+}
+
+/// An available app entry - stores path to app directory
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AvailableApp {
+    /// App path (e.g., "/resources/apps/terminal/")
+    pub path: String,
 }
 
 /// TaskbarDB for managing pinned apps
@@ -51,6 +106,47 @@ impl TaskbarDb {
         }
     }
 
+    /// Get all available apps (registered app paths)
+    pub async fn get_all_apps(&self) -> Vec<AvailableApp> {
+        match self.db.get_item(ALL_APPS_KEY).await {
+            Ok(value) => {
+                if let Ok(apps) = serde_wasm_bindgen::from_value::<Vec<AvailableApp>>(value) {
+                    apps
+                } else {
+                    Self::default_apps()
+                }
+            }
+            Err(_) => Self::default_apps(),
+        }
+    }
+
+    /// Set all available apps
+    pub async fn set_all_apps(&self, apps: Vec<AvailableApp>) -> Result<(), String> {
+        let value = serde_wasm_bindgen::to_value(&apps)
+            .map_err(|e| format!("Serialization error: {:?}", e))?;
+
+        self.db
+            .set_item(ALL_APPS_KEY, &value)
+            .await
+            .map_err(|e| format!("Failed to save all apps: {:?}", e))
+    }
+
+    /// Register an app path
+    pub async fn register_app(&self, path: &str) -> Result<(), String> {
+        let mut apps = self.get_all_apps().await;
+
+        // Check if already registered
+        if apps.iter().any(|a| a.path == path) {
+            return Ok(());
+        }
+
+        apps.push(AvailableApp {
+            path: path.to_string(),
+        });
+
+        self.set_all_apps(apps).await
+    }
+
     /// Set pinned apps (replaces all)
     pub async fn set_pinned(&self, apps: Vec<PinnedApp>) -> Result<(), String> {
         // Enforce max limit
@@ -65,12 +161,12 @@ impl TaskbarDb {
             .map_err(|e| format!("Failed to save pinned apps: {:?}", e))
     }
 
-    /// Pin an app (add to end)
-    pub async fn pin_app(&self, app_id: &str) -> Result<(), String> {
+    /// Pin an app by path (add to end)
+    pub async fn pin_app(&self, app_path: &str) -> Result<(), String> {
         let mut apps = self.get_pinned().await;
 
         // Check if already pinned
-        if apps.iter().any(|a| a.id == app_id) {
+        if apps.iter().any(|a| a.path == app_path) {
             return Ok(()); // Already pinned
         }
 
@@ -82,32 +178,32 @@ impl TaskbarDb {
         // Add at end
         let order = apps.iter().map(|a| a.order).max().unwrap_or(0) + 1;
         apps.push(PinnedApp {
-            id: app_id.to_string(),
+            path: app_path.to_string(),
             order,
         });
 
         self.set_pinned(apps).await
     }
 
-    /// Unpin an app
-    pub async fn unpin_app(&self, app_id: &str) -> Result<(), String> {
+    /// Unpin an app by path
+    pub async fn unpin_app(&self, app_path: &str) -> Result<(), String> {
         let apps = self.get_pinned().await;
-        let apps: Vec<PinnedApp> = apps.into_iter().filter(|a| a.id != app_id).collect();
+        let apps: Vec<PinnedApp> = apps.into_iter().filter(|a| a.path != app_path).collect();
         self.set_pinned(apps).await
     }
 
-    /// Check if an app is pinned
-    pub async fn is_pinned(&self, app_id: &str) -> bool {
+    /// Check if an app path is pinned
+    pub async fn is_pinned(&self, app_path: &str) -> bool {
         let apps = self.get_pinned().await;
-        apps.iter().any(|a| a.id == app_id)
+        apps.iter().any(|a| a.path == app_path)
     }
 
     /// Reorder pinned apps (move app to new position)
-    pub async fn reorder(&self, app_id: &str, new_order: u32) -> Result<(), String> {
+    pub async fn reorder(&self, app_path: &str, new_order: u32) -> Result<(), String> {
         let mut apps = self.get_pinned().await;
 
         // Find and update the app
-        if let Some(app) = apps.iter_mut().find(|a| a.id == app_id) {
+        if let Some(app) = apps.iter_mut().find(|a| a.path == app_path) {
             app.order = new_order;
         }
 
@@ -124,21 +220,44 @@ impl TaskbarDb {
     fn default_pinned() -> Vec<PinnedApp> {
         vec![
             PinnedApp {
-                id: "files".to_string(),
+                path: "/resources/apps/terminal/".to_string(),
                 order: 0,
-            },
-            PinnedApp {
-                id: "browser".to_string(),
-                order: 1,
-            },
-            PinnedApp {
-                id: "terminal".to_string(),
-                order: 2,
-            },
-            PinnedApp {
-                id: "settings".to_string(),
-                order: 3,
             },
         ]
     }
+
+    /// Default available apps
+    fn default_apps() -> Vec<AvailableApp> {
+        // Only include apps that actually exist with metadata.json
+        vec![
+            AvailableApp { path: "/resources/apps/terminal/".to_string() },
+        ]
+    }
+}
+
+/// Fetch app metadata from a path
+pub async fn fetch_app_metadata(app_path: &str) -> Result<AppMetadata, String> {
+    let url = format!("{}metadata.json", app_path);
+
+    let window = web_sys::window().ok_or("No window")?;
+    let promise = window.fetch_with_str(&url);
+    let response = JsFuture::from(promise)
+        .await
+        .map_err(|e| format!("Fetch failed: {:?}", e))?;
+
+    let response: web_sys::Response = response
+        .dyn_into()
+        .map_err(|_| "Not a Response")?;
+
+    if !response.ok() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+
+    let json_promise = response.json().map_err(|e| format!("JSON error: {:?}", e))?;
+    let json = JsFuture::from(json_promise)
+        .await
+        .map_err(|e| format!("JSON parse failed: {:?}", e))?;
+
+    serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Deserialization failed: {:?}", e))
 }

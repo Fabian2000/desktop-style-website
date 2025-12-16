@@ -4,28 +4,34 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{MouseEvent, TouchEvent};
 use yew::prelude::*;
 
-use crate::database::{PinnedApp, TaskbarDb};
+use crate::database::{fetch_app_metadata, AppMetadata, PinnedApp, TaskbarDb};
 
-/// App info for display
+/// App info for display - loaded from metadata.json
 #[derive(Clone, PartialEq)]
 pub struct AppDisplayInfo {
-    pub id: String,
-    pub icon: String,  // FontAwesome class OR image path (starts with /)
-    pub label: String,
+    pub path: String,       // App path (e.g., "/resources/apps/terminal/")
+    pub id: String,         // App ID from metadata
+    pub icon: String,       // Full icon path (e.g., "/resources/apps/terminal/icon.png")
+    pub label: String,      // App name from metadata
 }
 
 impl AppDisplayInfo {
-    fn new(id: &str, icon: &str, label: &str) -> Self {
+    /// Create from app path and loaded metadata
+    fn from_metadata(path: &str, metadata: &AppMetadata) -> Self {
+        // Build full icon path
+        let icon = format!("{}{}", path, metadata.icon);
         Self {
-            id: id.to_string(),
-            icon: icon.to_string(),
-            label: label.to_string(),
+            path: path.to_string(),
+            id: metadata.id.clone(),
+            icon,
+            label: metadata.name.clone(),
         }
     }
 
-    /// Check if icon is an image path (starts with /)
+    /// Check if icon is an image path (not FontAwesome class)
     pub fn is_image_icon(&self) -> bool {
-        self.icon.starts_with('/')
+        // Image paths contain dots (file extension) or start with /
+        self.icon.contains('.') || self.icon.starts_with('/')
     }
 }
 
@@ -37,68 +43,49 @@ pub struct TaskbarProps {
     #[prop_or_default]
     pub open_apps: Vec<String>,  // All open app IDs (for running indicator)
     #[prop_or_default]
-    pub on_app_click: Callback<String>,
-}
-
-/// Get icon class or path for an app ID
-fn get_app_icon(app_id: &str) -> &'static str {
-    match app_id {
-        "terminal" => "/resources/apps/terminal/icon.png",
-        "files" => "fa-solid fa-folder",
-        "browser" => "fa-solid fa-globe",
-        "settings" => "fa-solid fa-gear",
-        "gallery" => "fa-solid fa-images",
-        "music" => "fa-solid fa-music",
-        "contacts" => "fa-solid fa-address-book",
-        "info" | "about" => "fa-solid fa-circle-info",
-        _ => "fa-solid fa-cube",
-    }
-}
-
-/// Get label for an app ID
-fn get_app_label(app_id: &str) -> &'static str {
-    match app_id {
-        "terminal" => "Terminal",
-        "files" => "Files",
-        "browser" => "Browser",
-        "settings" => "Settings",
-        "gallery" => "Gallery",
-        "music" => "Music",
-        "contacts" => "Contacts",
-        "info" | "about" => "About",
-        _ => "App",
-    }
-}
-
-/// All available apps for the start menu
-fn get_all_apps() -> Vec<AppDisplayInfo> {
-    vec![
-        AppDisplayInfo::new("browser", "fa-solid fa-globe", "Browser"),
-        AppDisplayInfo::new("files", "fa-solid fa-folder", "Files"),
-        AppDisplayInfo::new("terminal", "/resources/apps/terminal/icon.png", "Terminal"),
-        AppDisplayInfo::new("settings", "fa-solid fa-gear", "Settings"),
-        AppDisplayInfo::new("info", "fa-solid fa-circle-info", "About"),
-        AppDisplayInfo::new("gallery", "fa-solid fa-images", "Gallery"),
-        AppDisplayInfo::new("music", "fa-solid fa-music", "Music"),
-        AppDisplayInfo::new("contacts", "fa-solid fa-address-book", "Contacts"),
-    ]
-}
-
-/// Convert PinnedApp to AppDisplayInfo
-fn pinned_to_display(pinned: &[PinnedApp]) -> Vec<AppDisplayInfo> {
-    pinned
-        .iter()
-        .map(|p| AppDisplayInfo {
-            id: p.id.clone(),
-            icon: get_app_icon(&p.id).to_string(),
-            label: get_app_label(&p.id).to_string(),
-        })
-        .collect()
+    pub on_app_click: Callback<String>,  // Emits app_id
 }
 
 /// Mobile dock apps (first 3 pinned apps)
 fn get_mobile_dock_apps(pinned: &[AppDisplayInfo]) -> Vec<AppDisplayInfo> {
     pinned.iter().take(3).cloned().collect()
+}
+
+/// Render an app icon - handles both image paths and FontAwesome classes
+fn render_icon(icon: &str, class: &str) -> Html {
+    if icon.contains('.') || icon.starts_with('/') {
+        // Image icon - use fixed size with object-fit
+        html! {
+            <img
+                class={class.to_string()}
+                src={icon.to_string()}
+                alt=""
+                style="width: 24px; height: 24px; object-fit: contain;"
+            />
+        }
+    } else {
+        // FontAwesome icon
+        html! {
+            <i class={format!("{} {}", class, icon)}></i>
+        }
+    }
+}
+
+/// Render an app icon for start menu (larger)
+fn render_menu_icon(icon: &str) -> Html {
+    if icon.contains('.') || icon.starts_with('/') {
+        html! {
+            <img
+                src={icon.to_string()}
+                alt=""
+                style="width: 22px; height: 22px; object-fit: contain;"
+            />
+        }
+    } else {
+        html! {
+            <i class={icon.to_string()}></i>
+        }
+    }
 }
 
 /// Context menu state
@@ -107,7 +94,7 @@ struct ContextMenuState {
     visible: bool,
     x: i32,
     y: i32,
-    app_id: String,
+    app_path: String,  // App path for pin/unpin
     is_pinned: bool,
 }
 
@@ -117,7 +104,7 @@ impl Default for ContextMenuState {
             visible: false,
             x: 0,
             y: 0,
-            app_id: String::new(),
+            app_path: String::new(),
             is_pinned: false,
         }
     }
@@ -129,28 +116,64 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         return html! {};
     }
 
-    // Pinned apps state (loaded from DB)
+    // Pinned apps state (loaded from DB + metadata)
     let pinned_apps = use_state(Vec::<AppDisplayInfo>::new);
-    let pinned_ids = use_state(Vec::<String>::new);
+    let pinned_paths = use_state(Vec::<String>::new);
+
+    // All available apps state (loaded from DB + metadata)
+    let all_apps = use_state(Vec::<AppDisplayInfo>::new);
 
     // Load pinned apps on mount
     {
         let pinned_apps = pinned_apps.clone();
-        let pinned_ids = pinned_ids.clone();
+        let pinned_paths = pinned_paths.clone();
+        let all_apps = all_apps.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
                 if let Ok(db) = TaskbarDb::open().await {
-                    let apps = db.get_pinned().await;
-                    let ids: Vec<String> = apps.iter().map(|a| a.id.clone()).collect();
-                    pinned_ids.set(ids);
-                    pinned_apps.set(pinned_to_display(&apps));
+                    // Load pinned apps
+                    let pinned = db.get_pinned().await;
+                    let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();
+                    pinned_paths.set(paths.clone());
+
+                    // Load metadata for each pinned app
+                    let mut display_apps = Vec::new();
+                    for app in &pinned {
+                        match fetch_app_metadata(&app.path).await {
+                            Ok(metadata) => {
+                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                            }
+                            Err(e) => {
+                                web_sys::console::error_1(
+                                    &format!("[Taskbar] Failed to load metadata for {}: {}", app.path, e).into()
+                                );
+                            }
+                        }
+                    }
+                    pinned_apps.set(display_apps);
+
+                    // Load all available apps
+                    let available = db.get_all_apps().await;
+                    let mut all_display = Vec::new();
+                    for app in &available {
+                        match fetch_app_metadata(&app.path).await {
+                            Ok(metadata) => {
+                                all_display.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                            }
+                            Err(e) => {
+                                web_sys::console::warn_1(
+                                    &format!("[Taskbar] Skipping app {}: {}", app.path, e).into()
+                                );
+                            }
+                        }
+                    }
+                    all_apps.set(all_display);
                 }
             });
             || ()
         });
     }
 
-    let all_apps = get_all_apps();
     let mobile_dock_apps = get_mobile_dock_apps(&pinned_apps);
 
     // App drawer/start menu state
@@ -175,15 +198,15 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     // Handle right-click on app in start menu
     let on_app_context_menu = {
         let context_menu = context_menu.clone();
-        let pinned_ids = pinned_ids.clone();
-        Callback::from(move |(e, app_id): (MouseEvent, String)| {
+        let pinned_paths = pinned_paths.clone();
+        Callback::from(move |(e, app_path): (MouseEvent, String)| {
             e.prevent_default();
-            let is_pinned = pinned_ids.contains(&app_id);
+            let is_pinned = pinned_paths.contains(&app_path);
             context_menu.set(ContextMenuState {
                 visible: true,
                 x: e.client_x(),
                 y: e.client_y(),
-                app_id,
+                app_path,
                 is_pinned,
             });
         })
@@ -192,13 +215,13 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     // Handle right-click on taskbar item (to unpin)
     let on_taskbar_context_menu = {
         let context_menu = context_menu.clone();
-        Callback::from(move |(e, app_id): (MouseEvent, String)| {
+        Callback::from(move |(e, app_path): (MouseEvent, String)| {
             e.prevent_default();
             context_menu.set(ContextMenuState {
                 visible: true,
                 x: e.client_x(),
                 y: e.client_y(),
-                app_id,
+                app_path,
                 is_pinned: true, // Taskbar items are always pinned
             });
         })
@@ -208,20 +231,28 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let on_pin_app = {
         let context_menu = context_menu.clone();
         let pinned_apps = pinned_apps.clone();
-        let pinned_ids = pinned_ids.clone();
+        let pinned_paths = pinned_paths.clone();
         Callback::from(move |_| {
-            let app_id = context_menu.app_id.clone();
+            let app_path = context_menu.app_path.clone();
             let pinned_apps = pinned_apps.clone();
-            let pinned_ids = pinned_ids.clone();
+            let pinned_paths = pinned_paths.clone();
             let context_menu = context_menu.clone();
 
             spawn_local(async move {
                 if let Ok(db) = TaskbarDb::open().await {
-                    if db.pin_app(&app_id).await.is_ok() {
-                        let apps = db.get_pinned().await;
-                        let ids: Vec<String> = apps.iter().map(|a| a.id.clone()).collect();
-                        pinned_ids.set(ids);
-                        pinned_apps.set(pinned_to_display(&apps));
+                    if db.pin_app(&app_path).await.is_ok() {
+                        // Reload pinned apps with metadata
+                        let pinned = db.get_pinned().await;
+                        let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();
+                        pinned_paths.set(paths);
+
+                        let mut display_apps = Vec::new();
+                        for app in &pinned {
+                            if let Ok(metadata) = fetch_app_metadata(&app.path).await {
+                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                            }
+                        }
+                        pinned_apps.set(display_apps);
                     }
                 }
                 context_menu.set(ContextMenuState::default());
@@ -233,20 +264,28 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let on_unpin_app = {
         let context_menu = context_menu.clone();
         let pinned_apps = pinned_apps.clone();
-        let pinned_ids = pinned_ids.clone();
+        let pinned_paths = pinned_paths.clone();
         Callback::from(move |_| {
-            let app_id = context_menu.app_id.clone();
+            let app_path = context_menu.app_path.clone();
             let pinned_apps = pinned_apps.clone();
-            let pinned_ids = pinned_ids.clone();
+            let pinned_paths = pinned_paths.clone();
             let context_menu = context_menu.clone();
 
             spawn_local(async move {
                 if let Ok(db) = TaskbarDb::open().await {
-                    if db.unpin_app(&app_id).await.is_ok() {
-                        let apps = db.get_pinned().await;
-                        let ids: Vec<String> = apps.iter().map(|a| a.id.clone()).collect();
-                        pinned_ids.set(ids);
-                        pinned_apps.set(pinned_to_display(&apps));
+                    if db.unpin_app(&app_path).await.is_ok() {
+                        // Reload pinned apps with metadata
+                        let pinned = db.get_pinned().await;
+                        let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();
+                        pinned_paths.set(paths);
+
+                        let mut display_apps = Vec::new();
+                        for app in &pinned {
+                            if let Ok(metadata) = fetch_app_metadata(&app.path).await {
+                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                            }
+                        }
+                        pinned_apps.set(display_apps);
                     }
                 }
                 context_menu.set(ContextMenuState::default());
@@ -456,7 +495,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 // Pinned apps from DB
                 { for pinned_apps.iter().map(|app| {
                     let app_id = app.id.clone();
-                    let app_id_ctx = app_id.clone();
+                    let app_path = app.path.clone();
                     let on_click = {
                         let on_app_click = props.on_app_click.clone();
                         let app_id = app_id.clone();
@@ -466,8 +505,9 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     };
                     let on_context = {
                         let on_taskbar_context_menu = on_taskbar_context_menu.clone();
+                        let app_path = app_path.clone();
                         Callback::from(move |e: MouseEvent| {
-                            on_taskbar_context_menu.emit((e, app_id_ctx.clone()));
+                            on_taskbar_context_menu.emit((e, app_path.clone()));
                         })
                     };
 
@@ -481,7 +521,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
                     html! {
                         <button class={class} onclick={on_click} oncontextmenu={on_context}>
-                            <i class={format!("taskbar-icon {}", app.icon)}></i>
+                            { render_icon(&app.icon, "taskbar-icon") }
                         </button>
                     }
                 })}
@@ -515,7 +555,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     <div class="start-menu-grid">
                         { for all_apps.iter().map(|app| {
                             let app_id = app.id.clone();
-                            let app_id_ctx = app_id.clone();
+                            let app_path = app.path.clone();
                             let close_drawer = close_drawer.clone();
                             let on_click = {
                                 let on_app_click = props.on_app_click.clone();
@@ -527,11 +567,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                             };
                             let on_context = {
                                 let on_app_context_menu = on_app_context_menu.clone();
+                                let app_path = app_path.clone();
                                 Callback::from(move |e: MouseEvent| {
-                                    on_app_context_menu.emit((e, app_id_ctx.clone()));
+                                    on_app_context_menu.emit((e, app_path.clone()));
                                 })
                             };
-                            let is_pinned = pinned_ids.contains(&app.id);
+                            let is_pinned = pinned_paths.contains(&app.path);
 
                             html! {
                                 <button
@@ -540,7 +581,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                                     oncontextmenu={on_context}
                                 >
                                     <div class="app-icon-wrapper">
-                                        <i class={app.icon.clone()}></i>
+                                        { render_menu_icon(&app.icon) }
                                         if is_pinned {
                                             <span class="pinned-indicator" title="Angeheftet">
                                                 <i class="fa-solid fa-thumbtack"></i>
@@ -606,7 +647,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
                     html! {
                         <button class="dock-item" onclick={on_click}>
-                            <i class={app.icon.clone()}></i>
+                            { render_icon(&app.icon, "") }
                         </button>
                     }
                 })}
@@ -642,7 +683,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                         html! {
                             <button class="app-icon" onclick={on_click}>
                                 <div class="app-icon-bg">
-                                    <i class={app.icon.clone()}></i>
+                                    { render_menu_icon(&app.icon) }
                                 </div>
                                 <span class="app-icon-label">{&app.label}</span>
                             </button>

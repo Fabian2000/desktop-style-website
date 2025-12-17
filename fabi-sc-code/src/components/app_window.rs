@@ -108,7 +108,7 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     let run_counter_cell = use_mut_ref(|| 0u32);
 
     // Helper function to run Python code with optional input, back event, or click handler
-    // Returns true if Python requested window close
+    // Returns (close_requested, focus_selector, scroll_to_bottom)
     fn run_python_app(
         code: &str,
         input: Option<&str>,
@@ -120,7 +120,7 @@ pub fn app_window(props: &AppWindowProps) -> Html {
         app_content: &UseStateHandle<Option<String>>,
         app_error: &UseStateHandle<Option<String>>,
         runtime_title: &UseStateHandle<Option<String>>,
-    ) -> bool {
+    ) -> (bool, Option<String>, Option<String>) {
         web_sys::console::log_1(&format!("[Python] Running app: {} ({})", app_id, window_id).into());
 
         // Create Python runtime for this app
@@ -210,10 +210,12 @@ if '__click_handler__' in dir() and __click_handler__:
             }
         }
 
-        // Return whether close was requested
+        // Return close_requested, focus_selector, and scroll_to_bottom
         let close_req = runtime.close_requested();
-        web_sys::console::log_1(&format!("[Python] close_requested = {}", close_req).into());
-        close_req
+        let focus_sel = runtime.take_focus_selector();
+        let scroll_bottom = runtime.take_scroll_to_bottom();
+        web_sys::console::log_1(&format!("[Python] close_requested = {}, focus_selector = {:?}, scroll_to_bottom = {:?}", close_req, focus_sel, scroll_bottom).into());
+        (close_req, focus_sel, scroll_bottom)
     }
 
     // Run Python code when it's provided or when input is submitted or back is pressed
@@ -246,7 +248,7 @@ if '__click_handler__' in dir() and __click_handler__:
                 // Take pending click handler
                 let click_handler = pending_click.borrow_mut().take();
 
-                let close_requested = run_python_app(
+                let (close_requested, focus_selector, scroll_to_bottom) = run_python_app(
                     code,
                     input.as_deref(),
                     back_pressed,
@@ -263,6 +265,56 @@ if '__click_handler__' in dir() and __click_handler__:
                 if close_requested {
                     web_sys::console::log_1(&"[Python] App requested window close".into());
                     props.on_close.emit(());
+                }
+
+                // If Python requested focus, do it after DOM update
+                if let Some(name) = focus_selector {
+                    // Build selector scoped to this window's .app-ui container
+                    // The name parameter maps to data-name attribute
+                    let window_id_clone = window_id.clone();
+                    let name_clone = name.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        // Small delay to ensure DOM update
+                        gloo_timers::future::TimeoutFuture::new(10).await;
+                        if let Some(window) = web_sys::window() {
+                            if let Some(document) = window.document() {
+                                // Find element by data-name inside this specific window
+                                let scoped_selector = format!(
+                                    "[data-window-id=\"{}\"] .app-ui [data-name=\"{}\"]",
+                                    window_id_clone, name_clone
+                                );
+                                if let Ok(Some(element)) = document.query_selector(&scoped_selector) {
+                                    if let Some(html_element) = element.dyn_ref::<web_sys::HtmlElement>() {
+                                        let _ = html_element.focus();
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // If Python requested scroll to bottom, do it after DOM update
+                if let Some(name) = scroll_to_bottom {
+                    let window_id_clone = window_id.clone();
+                    let name_clone = name.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        // Small delay to ensure DOM update
+                        gloo_timers::future::TimeoutFuture::new(10).await;
+                        if let Some(window) = web_sys::window() {
+                            if let Some(document) = window.document() {
+                                // Find element by data-name inside this specific window
+                                let scoped_selector = format!(
+                                    "[data-window-id=\"{}\"] .app-ui [data-name=\"{}\"]",
+                                    window_id_clone, name_clone
+                                );
+                                if let Ok(Some(element)) = document.query_selector(&scoped_selector) {
+                                    // Scroll to bottom by setting scrollTop to scrollHeight
+                                    let scroll_height = element.scroll_height();
+                                    element.set_scroll_top(scroll_height);
+                                }
+                            }
+                        }
+                    });
                 }
             } else {
                 web_sys::console::log_1(&format!("[Python] No code provided for {}", app_id).into());
@@ -315,6 +367,29 @@ if '__click_handler__' in dir() and __click_handler__:
         let run_counter = run_counter.clone();
         let run_counter_cell = run_counter_cell.clone();
         Callback::from(move |e: MouseEvent| {
+            // Don't trigger click handler if user is selecting text
+            // Use JS interop to check window.getSelection().toString()
+            if let Some(window) = web_sys::window() {
+                if let Ok(selection) = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("getSelection")) {
+                    if let Some(get_selection_fn) = selection.dyn_ref::<js_sys::Function>() {
+                        if let Ok(sel_obj) = get_selection_fn.call0(&window) {
+                            if let Ok(to_string_fn) = js_sys::Reflect::get(&sel_obj, &wasm_bindgen::JsValue::from_str("toString")) {
+                                if let Some(to_string) = to_string_fn.dyn_ref::<js_sys::Function>() {
+                                    if let Ok(text) = to_string.call0(&sel_obj) {
+                                        if let Some(selected) = text.as_string() {
+                                            if !selected.is_empty() {
+                                                // User has selected text, don't trigger click handler
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Check if the target or any ancestor has data-on-click
             if let Some(target) = e.target() {
                 if let Ok(element) = target.dyn_into::<web_sys::Element>() {
@@ -672,6 +747,7 @@ if '__click_handler__' in dir() and __click_handler__:
             ref={window_ref}
             class={window_class}
             style={window_style}
+            data-window-id={props.window_id.clone()}
             onmousedown={on_window_mousedown}
             onkeydown={on_keydown}
             onclick={on_click}

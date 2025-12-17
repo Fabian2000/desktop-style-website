@@ -68,10 +68,14 @@ pub fn generate_widget_id() -> String {
 }
 
 /// Render a text/label element
-pub fn render_text(content: &str, style: &Style) -> String {
+/// If name is provided, it will be rendered as data-name for targeting with window.scroll_to_bottom()
+pub fn render_text(content: &str, name: Option<&str>, style: &Style) -> String {
     let escaped = sanitizer::escape_html(content);
+    let name_attr = name
+        .map(|n| format!(r#" data-name="{}""#, sanitizer::sanitize_attribute(n)))
+        .unwrap_or_default();
     // Use <pre> to preserve whitespace/newlines for terminal-like output
-    format!(r#"<pre class="ui-text"{}>{}</pre>"#, style.to_inline(), escaped)
+    format!(r#"<pre class="ui-text"{}{}>{}</pre>"#, name_attr, style.to_inline(), escaped)
 }
 
 /// Render a label (single line, no pre)
@@ -83,10 +87,14 @@ pub fn render_label(content: &str, style: &Style) -> String {
 /// Render a button
 /// If on_click is provided, the button will dispatch a click event to call the Python function
 /// If icon is provided, it will be rendered as a FontAwesome icon instead of text
-pub fn render_button(text: &str, on_click: Option<&str>, icon: Option<&str>, style: &Style) -> String {
+/// If name is provided, it will be rendered as data-name for targeting with window.focus()
+pub fn render_button(text: &str, on_click: Option<&str>, icon: Option<&str>, name: Option<&str>, style: &Style) -> String {
     let id = generate_widget_id();
     let on_click_attr = on_click
         .map(|name| format!(r#" data-on-click="{}""#, sanitizer::sanitize_attribute(name)))
+        .unwrap_or_default();
+    let name_attr = name
+        .map(|n| format!(r#" data-name="{}""#, sanitizer::sanitize_attribute(n)))
         .unwrap_or_default();
     let content = if let Some(icon_class) = icon {
         // Render icon instead of text
@@ -95,9 +103,10 @@ pub fn render_button(text: &str, on_click: Option<&str>, icon: Option<&str>, sty
         sanitizer::escape_html(text)
     };
     format!(
-        r#"<button class="ui-button" data-widget-id="{}"{}{} >{}</button>"#,
+        r#"<button class="ui-button" data-widget-id="{}"{}{}{} >{}</button>"#,
         sanitizer::sanitize_attribute(&id),
         on_click_attr,
+        name_attr,
         style.to_inline(),
         content
     )
@@ -105,23 +114,32 @@ pub fn render_button(text: &str, on_click: Option<&str>, icon: Option<&str>, sty
 
 /// Render an input field
 /// If on_submit is provided, the input will dispatch a custom event when Enter is pressed
-pub fn render_input(placeholder: &str, on_submit: Option<&str>, style: &Style) -> String {
+/// If name is provided, it will be rendered as data-name for targeting with window.focus()
+pub fn render_input(placeholder: &str, on_submit: Option<&str>, name: Option<&str>, style: &Style) -> String {
     let id = generate_widget_id();
     let on_submit_attr = on_submit
         .map(|name| format!(r#" data-on-submit="{}""#, sanitizer::sanitize_attribute(name)))
         .unwrap_or_default();
+    let name_attr = name
+        .map(|n| format!(r#" data-name="{}""#, sanitizer::sanitize_attribute(n)))
+        .unwrap_or_default();
     format!(
-        r#"<input class="ui-input" type="text" placeholder="{}" data-widget-id="{}"{}{} />"#,
+        r#"<input class="ui-input" type="text" placeholder="{}" data-widget-id="{}"{}{}{} />"#,
         sanitizer::sanitize_attribute(placeholder),
         sanitizer::sanitize_attribute(&id),
         on_submit_attr,
+        name_attr,
         style.to_inline()
     )
 }
 
 /// Render a container (div)
-pub fn render_container(children: &str, style: &Style) -> String {
-    format!(r#"<div class="ui-container"{}>{}</div>"#, style.to_inline(), children)
+/// If on_click is provided, the container will dispatch a click event to call the Python function
+pub fn render_container(children: &str, on_click: Option<&str>, style: &Style) -> String {
+    let on_click_attr = on_click
+        .map(|name| format!(r#" data-on-click="{}""#, sanitizer::sanitize_attribute(name)))
+        .unwrap_or_default();
+    format!(r#"<div class="ui-container"{}{}>{}</div>"#, on_click_attr, style.to_inline(), children)
 }
 
 /// Render a row (flex horizontal)

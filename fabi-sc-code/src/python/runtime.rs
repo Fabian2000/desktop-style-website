@@ -47,6 +47,10 @@ pub struct AppState {
     pub title: String,
     /// Output lines (for terminal-style apps)
     pub output_lines: Vec<String>,
+    /// Element name to focus (via data-name attribute)
+    pub focus_selector: Option<String>,
+    /// Element name to scroll to bottom (via data-name attribute)
+    pub scroll_to_bottom: Option<String>,
 }
 
 impl AppState {
@@ -60,6 +64,8 @@ impl AppState {
             pending_ui: None,
             title: String::new(),
             output_lines: Vec::new(),
+            focus_selector: None,
+            scroll_to_bottom: None,
         }
     }
 }
@@ -209,6 +215,16 @@ sys.stderr = ConsoleWriter()
     pub fn close_requested(&self) -> bool {
         self.state.borrow().close_requested
     }
+
+    /// Take the focus selector (returns Some(selector) if focus was requested, and clears it)
+    pub fn take_focus_selector(&self) -> Option<String> {
+        self.state.borrow_mut().focus_selector.take()
+    }
+
+    /// Take the scroll_to_bottom target (returns Some(name) if scroll was requested, and clears it)
+    pub fn take_scroll_to_bottom(&self) -> Option<String> {
+        self.state.borrow_mut().scroll_to_bottom.take()
+    }
 }
 
 // ============================================================================
@@ -232,6 +248,13 @@ mod fabiscos {
     }
 }
 
+// VFS sync helper - exposed for use by ui.image() and other modules
+#[wasm_bindgen::prelude::wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen::prelude::wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = getDataUrl)]
+    pub fn vfs_get_data_url(path: &str) -> Option<String>;
+}
+
 /// fabiscos.vfs - Virtual Filesystem API
 ///
 /// VFS operations use synchronous JavaScript interop to access IndexedDB
@@ -249,6 +272,9 @@ mod fabiscos_vfs {
         #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = readText)]
         fn js_vfs_read_text(path: &str) -> Option<String>;
 
+        #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = readBytes)]
+        fn js_vfs_read_bytes(path: &str) -> Option<js_sys::Uint8Array>;
+
         #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = exists)]
         fn js_vfs_exists(path: &str) -> bool;
 
@@ -257,6 +283,9 @@ mod fabiscos_vfs {
 
         #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = write)]
         fn js_vfs_write(path: &str, content: &str) -> bool;
+
+        #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = writeBytes)]
+        fn js_vfs_write_bytes(path: &str, bytes: &js_sys::Uint8Array) -> bool;
 
         #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = mkdir)]
         fn js_vfs_mkdir(path: &str) -> bool;
@@ -269,12 +298,23 @@ mod fabiscos_vfs {
 
         #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = "move")]
         fn js_vfs_move(src: &str, dst: &str) -> bool;
+
+        #[wasm_bindgen(js_namespace = ["window", "__vfsSync"], js_name = getDataUrl)]
+        fn js_vfs_get_data_url(path: &str) -> Option<String>;
     }
 
     #[pyfunction]
     fn read_text(path: String, vm: &VirtualMachine) -> PyResult<String> {
         match js_vfs_read_text(&path) {
             Some(content) => Ok(content),
+            None => Err(vm.new_runtime_error(format!("Cannot read file: {}", path)))
+        }
+    }
+
+    #[pyfunction]
+    fn read_bytes(path: String, vm: &VirtualMachine) -> PyResult<Vec<u8>> {
+        match js_vfs_read_bytes(&path) {
+            Some(arr) => Ok(arr.to_vec()),
             None => Err(vm.new_runtime_error(format!("Cannot read file: {}", path)))
         }
     }
@@ -327,6 +367,24 @@ mod fabiscos_vfs {
             Ok(())
         } else {
             Err(vm.new_runtime_error(format!("Cannot write file: {}", path)))
+        }
+    }
+
+    #[pyfunction]
+    fn write_bytes(path: String, data: Vec<u8>, vm: &VirtualMachine) -> PyResult<()> {
+        let arr = js_sys::Uint8Array::from(data.as_slice());
+        if js_vfs_write_bytes(&path, &arr) {
+            Ok(())
+        } else {
+            Err(vm.new_runtime_error(format!("Cannot write file: {}", path)))
+        }
+    }
+
+    #[pyfunction]
+    fn get_data_url(path: String, vm: &VirtualMachine) -> PyResult<String> {
+        match js_vfs_get_data_url(&path) {
+            Some(url) => Ok(url),
+            None => Err(vm.new_runtime_error(format!("Cannot get data URL for: {}", path)))
         }
     }
 
@@ -458,7 +516,8 @@ mod fabiscos_ui {
     }
 
     /// Text element (multiline, preserves whitespace)
-    /// Usage: ui.text(content, style=my_style, color="#f00")
+    /// Usage: ui.text(content, style=my_style, color="#f00", name="output")
+    /// The name parameter assigns a data-name attribute for targeting with window.scroll_to_bottom()
     #[pyfunction]
     fn text(content: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
         let mut kw: std::collections::HashMap<String, String> = kwargs
@@ -466,8 +525,9 @@ mod fabiscos_ui {
             .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
             .collect();
         let base_style = kw.remove("style");
+        let name = kw.remove("name");
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
-        ui::render_text(&content, &s)
+        ui::render_text(&content, name.as_deref(), &s)
     }
 
     /// Label element (single line)
@@ -483,9 +543,10 @@ mod fabiscos_ui {
     }
 
     /// Button element
-    /// Usage: ui.button("Click Me", style=my_style, on_click="my_handler")
+    /// Usage: ui.button("Click Me", style=my_style, on_click="my_handler", name="my-btn")
     /// Usage with icon: ui.button("", icon="fa-solid fa-bars", on_click="my_handler")
     /// The on_click parameter specifies the Python function to call when clicked
+    /// The name parameter assigns a data-name attribute for targeting with window.focus()
     #[pyfunction]
     fn button(text: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
         let mut kw: std::collections::HashMap<String, String> = kwargs
@@ -495,13 +556,15 @@ mod fabiscos_ui {
         let base_style = kw.remove("style");
         let on_click = kw.remove("on_click");
         let icon = kw.remove("icon");
+        let name = kw.remove("name");
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
-        ui::render_button(&text, on_click.as_deref(), icon.as_deref(), &s)
+        ui::render_button(&text, on_click.as_deref(), icon.as_deref(), name.as_deref(), &s)
     }
 
     /// Input field
-    /// Usage: ui.input("placeholder", style=my_style, flex="1", on_submit="execute")
+    /// Usage: ui.input("placeholder", style=my_style, flex="1", on_submit="execute", name="my-input")
     /// The on_submit parameter specifies the Python function to call when Enter is pressed
+    /// The name parameter assigns a data-name attribute for targeting with window.focus()
     #[pyfunction]
     fn input(placeholder: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
         let mut kw: std::collections::HashMap<String, String> = kwargs
@@ -510,8 +573,9 @@ mod fabiscos_ui {
             .collect();
         let base_style = kw.remove("style");
         let on_submit = kw.remove("on_submit");
+        let name = kw.remove("name");
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
-        ui::render_input(&placeholder, on_submit.as_deref(), &s)
+        ui::render_input(&placeholder, on_submit.as_deref(), name.as_deref(), &s)
     }
 
     /// Checkbox element
@@ -579,6 +643,7 @@ mod fabiscos_ui {
     }
 
     /// Container (generic div)
+    /// Usage: ui.container([...], style=my_style, on_click="my_handler")
     #[pyfunction]
     fn container(children: Vec<String>, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
         let mut kw: std::collections::HashMap<String, String> = kwargs
@@ -586,8 +651,9 @@ mod fabiscos_ui {
             .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
             .collect();
         let base_style = kw.remove("style");
+        let on_click = kw.remove("on_click");
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
-        ui::render_container(&children.join(""), &s)
+        ui::render_container(&children.join(""), on_click.as_deref(), &s)
     }
 
     /// Row (horizontal flex container)
@@ -621,8 +687,11 @@ mod fabiscos_ui {
     }
 
     /// Image element
+    /// If src is a VFS path (not http/https), it will be converted to a data URL
     #[pyfunction]
     fn image(src: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
+        use crate::python::runtime::vfs_get_data_url;
+
         let mut kw: std::collections::HashMap<String, String> = kwargs
             .into_iter()
             .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
@@ -630,7 +699,16 @@ mod fabiscos_ui {
         let base_style = kw.remove("style");
         let alt = kw.remove("alt").unwrap_or_default();
         let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
-        ui::render_image(&src, &alt, &s)
+
+        // Convert VFS paths to data URLs (except http/https URLs)
+        let actual_src = if src.starts_with("http://") || src.starts_with("https://") || src.starts_with("data:") {
+            src
+        } else {
+            // Try to get data URL from VFS
+            vfs_get_data_url(&src).unwrap_or(src)
+        };
+
+        ui::render_image(&actual_src, &alt, &s)
     }
 
     /// Link element
@@ -733,6 +811,24 @@ mod fabiscos_window {
             .map(|s| vm.ctx.new_str(s).into())
             .collect();
         vm.ctx.new_list(py_lines).into()
+    }
+
+    /// Focus an element by its name (data-name attribute)
+    /// Usage: window.focus("my-input") where ui.input(..., name="my-input")
+    #[pyfunction]
+    fn focus(name: String, _vm: &VirtualMachine) {
+        if let Some(state) = get_current_state() {
+            state.borrow_mut().focus_selector = Some(name);
+        }
+    }
+
+    /// Scroll an element to the bottom (for terminal output, chat logs, etc.)
+    /// Usage: window.scroll_to_bottom("output") where ui.text(..., name="output")
+    #[pyfunction]
+    fn scroll_to_bottom(name: String, _vm: &VirtualMachine) {
+        if let Some(state) = get_current_state() {
+            state.borrow_mut().scroll_to_bottom = Some(name);
+        }
     }
 
     #[pyfunction]

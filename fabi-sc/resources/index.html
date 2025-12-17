@@ -287,6 +287,109 @@
                         return entry?.content;
                     }
                     return null;
+                },
+
+                // Read binary file content - returns Uint8Array or null
+                readBytes(path) {
+                    const entry = this._cache.get(path);
+                    if (!entry || entry.type !== 'file') return null;
+                    if (entry.bytes !== undefined) return entry.bytes;
+                    // If we have string content, encode it
+                    if (entry.content !== undefined) {
+                        return new TextEncoder().encode(entry.content);
+                    }
+                    return null;
+                },
+
+                // Write binary file content - takes Uint8Array
+                writeBytes(path, bytes) {
+                    this._cache.set(path, {
+                        type: 'file',
+                        name: path.split('/').pop(),
+                        bytes: bytes
+                    });
+                    this._persistNodeBytes(path, bytes);
+                    return true;
+                },
+
+                // Persist binary content to IndexedDB
+                async _persistNodeBytes(path, bytes) {
+                    if (!this._db) return;
+                    const tx = this._db.transaction(['nodes', 'content'], 'readwrite');
+                    const fileTypeObj = { File: null };
+                    const node = {
+                        path: path,
+                        name: path.split('/').pop(),
+                        file_type: fileTypeObj,
+                        permissions: { readonly: false, system: false, hidden: false },
+                        created: Date.now(),
+                        modified: Date.now(),
+                        size: bytes.length,
+                        mime_type: null
+                    };
+                    tx.objectStore('nodes').put(node, path);
+                    tx.objectStore('content').put(bytes.buffer, path);
+                },
+
+                // Load binary content from IndexedDB into cache
+                async loadBytes(path) {
+                    if (!this._db) return null;
+                    const tx = this._db.transaction('content', 'readonly');
+                    const result = await new Promise((resolve) => {
+                        const request = tx.objectStore('content').get(path);
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = () => resolve(null);
+                    });
+                    if (result) {
+                        const entry = this._cache.get(path);
+                        let bytes;
+                        if (result instanceof ArrayBuffer) {
+                            bytes = new Uint8Array(result);
+                        } else if (result instanceof Uint8Array) {
+                            bytes = result;
+                        } else {
+                            return null;
+                        }
+                        if (entry) {
+                            entry.bytes = bytes;
+                        }
+                        return bytes;
+                    }
+                    return null;
+                },
+
+                // Get data URL for a file (for images, icons, etc.) - used by Rust
+                getDataUrl(path) {
+                    const entry = this._cache.get(path);
+                    if (!entry || entry.type !== 'file') return null;
+
+                    // Determine MIME type from extension
+                    const ext = path.split('.').pop()?.toLowerCase() || '';
+                    const mimeTypes = {
+                        'png': 'image/png',
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'gif': 'image/gif',
+                        'webp': 'image/webp',
+                        'svg': 'image/svg+xml',
+                        'ico': 'image/x-icon'
+                    };
+                    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
+                    // Get bytes
+                    let bytes = entry.bytes;
+                    if (!bytes && entry.content) {
+                        bytes = new TextEncoder().encode(entry.content);
+                    }
+                    if (!bytes) return null;
+
+                    // Convert to base64
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    const base64 = btoa(binary);
+                    return `data:${mimeType};base64,${base64}`;
                 }
             };
 

@@ -34,7 +34,17 @@
     {
       "path": "/home/.system/apps/terminal/main.py",
       "server_path": "/resources/apps/terminal/main.py",
-      "hash": "terminal_main_v10",
+      "hash": "terminal_main_v15",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/terminal/icon.png",
+      "server_path": "/resources/apps/terminal/icon.png",
+      "hash": "terminal_icon_v1",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -55,6 +65,16 @@
       "path": "/home/.system/apps/help/main.py",
       "server_path": "/resources/apps/help/main.py",
       "hash": "help_main_v14",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/help/icon.png",
+      "server_path": "/resources/apps/help/icon.png",
+      "hash": "help_icon_v1",
       "permissions": {
         "readonly": true,
         "system": true,

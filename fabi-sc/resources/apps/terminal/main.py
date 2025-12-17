@@ -54,7 +54,13 @@ else:
         ""
     ]
 
-cwd = vfs.cwd()
+# Load cwd from persistent storage (or default to /home)
+_saved_cwd = state.get("cwd")
+if _saved_cwd:
+    cwd = _saved_cwd
+    vfs.set_cwd(cwd)
+else:
+    cwd = vfs.cwd()
 
 def format_prompt():
     return f"{cwd} $ "
@@ -62,6 +68,7 @@ def format_prompt():
 def save_state():
     """Save terminal state to persistent storage"""
     state.set_list("output_lines", output_lines)
+    state.set("cwd", cwd)
 
 def execute(cmd):
     """Execute a terminal command"""
@@ -239,6 +246,8 @@ def on_input(value):
     if value.strip():
         execute(value)
     render()
+    window.focus("input")
+    window.scroll_to_bottom("output")
 
 def on_back():
     """Called when mobile back button is pressed"""
@@ -246,6 +255,10 @@ def on_back():
     print("on_back() called, calling window.close()...")
     window.close()
     print("window.close() finished")
+
+def focus_terminal():
+    """Focus the input field when terminal is clicked"""
+    window.focus("input")
 
 def render():
     """Render the terminal UI"""
@@ -259,13 +272,14 @@ def render():
     output_text = "\n".join(output_lines)
 
     # Create terminal UI with proper styling
+    # on_click on container focuses input field when clicking anywhere
     terminal_html = ui.container([
-        ui.text(output_text, style=output_style),
+        ui.text(output_text, style=output_style, name="output"),
         ui.row([
             ui.label(format_prompt(), style=prompt_style),
-            ui.input("", style=input_style, on_submit="execute")
+            ui.input("", style=input_style, on_submit="execute", name="input")
         ], style=input_row_style)
-    ], style=container_style)
+    ], style=container_style, on_click="focus_terminal")
 
     window.set_content(terminal_html)
     window.set_title("Terminal")

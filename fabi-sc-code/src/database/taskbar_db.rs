@@ -3,13 +3,12 @@
 //! Stores the user's pinned apps in IndexedDB.
 //! Maximum 10 pinned apps allowed.
 //!
-//! Apps are stored by path (e.g., "/resources/apps/terminal/")
-//! and metadata is loaded from {path}metadata.json
+//! Apps are stored by VFS path (e.g., "/home/.system/apps/terminal/")
+//! and metadata is loaded from {path}metadata.json via VFS
 
 use super::IndexedDb;
+use crate::filesystem;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
 
 const DB_NAME: &str = "taskbar";
 const STORE_NAME: &str = "pinned";
@@ -220,11 +219,11 @@ impl TaskbarDb {
     fn default_pinned() -> Vec<PinnedApp> {
         vec![
             PinnedApp {
-                path: "/resources/apps/terminal/".to_string(),
+                path: "/home/.system/apps/terminal/".to_string(),
                 order: 0,
             },
             PinnedApp {
-                path: "/resources/apps/help/".to_string(),
+                path: "/home/.system/apps/help/".to_string(),
                 order: 1,
             },
         ]
@@ -234,14 +233,14 @@ impl TaskbarDb {
     fn default_apps() -> Vec<AvailableApp> {
         // Only include apps that actually exist with metadata.json
         vec![
-            AvailableApp { path: "/resources/apps/terminal/".to_string() },
-            AvailableApp { path: "/resources/apps/help/".to_string() },
+            AvailableApp { path: "/home/.system/apps/terminal/".to_string() },
+            AvailableApp { path: "/home/.system/apps/help/".to_string() },
         ]
     }
 
     /// Ensure essential app (Help) is pinned for new/existing users
     pub async fn ensure_help_pinned(&self) -> Result<(), String> {
-        let help_path = "/resources/apps/help/";
+        let help_path = "/home/.system/apps/help/";
         let mut pinned = self.get_pinned().await;
 
         if !pinned.iter().any(|p| p.path == help_path) {
@@ -258,29 +257,14 @@ impl TaskbarDb {
     }
 }
 
-/// Fetch app metadata from a path
+/// Fetch app metadata from VFS path
 pub async fn fetch_app_metadata(app_path: &str) -> Result<AppMetadata, String> {
-    let url = format!("{}metadata.json", app_path);
+    let metadata_path = format!("{}metadata.json", app_path);
 
-    let window = web_sys::window().ok_or("No window")?;
-    let promise = window.fetch_with_str(&url);
-    let response = JsFuture::from(promise)
+    let json = filesystem::vfs::read_to_string(&metadata_path)
         .await
-        .map_err(|e| format!("Fetch failed: {:?}", e))?;
+        .map_err(|e| format!("Failed to read {}: {:?}", metadata_path, e))?;
 
-    let response: web_sys::Response = response
-        .dyn_into()
-        .map_err(|_| "Not a Response")?;
-
-    if !response.ok() {
-        return Err(format!("HTTP {}", response.status()));
-    }
-
-    let json_promise = response.json().map_err(|e| format!("JSON error: {:?}", e))?;
-    let json = JsFuture::from(json_promise)
-        .await
-        .map_err(|e| format!("JSON parse failed: {:?}", e))?;
-
-    serde_wasm_bindgen::from_value(json)
-        .map_err(|e| format!("Deserialization failed: {:?}", e))
+    serde_json::from_str(&json)
+        .map_err(|e| format!("Failed to parse metadata: {:?}", e))
 }

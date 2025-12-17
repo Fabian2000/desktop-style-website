@@ -35,6 +35,7 @@ web-sys = { version = "0.3.77", features = [
   "Request", "RequestInit", "RequestMode", "Response", "Headers",
   "ShadowRoot", "ShadowRootInit", "ShadowRootMode", "NodeList"
 ] }
+base64 = "0.22.1"
 
 [build-dependencies]
 chrono = "0.4.41"

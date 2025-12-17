@@ -1,3 +1,4 @@
+use base64::Engine;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -5,21 +6,40 @@ use web_sys::{MouseEvent, TouchEvent};
 use yew::prelude::*;
 
 use crate::database::{fetch_app_metadata, AppMetadata, PinnedApp, TaskbarDb};
+use crate::filesystem;
 
 /// App info for display - loaded from metadata.json
 #[derive(Clone, PartialEq)]
 pub struct AppDisplayInfo {
-    pub path: String,       // App path (e.g., "/resources/apps/terminal/")
+    pub path: String,       // VFS app path (e.g., "/home/.system/apps/terminal/")
     pub id: String,         // App ID from metadata
-    pub icon: String,       // Full icon path (e.g., "/resources/apps/terminal/icon.png")
+    pub icon: String,       // Data URL or FontAwesome class
     pub label: String,      // App name from metadata
 }
 
 impl AppDisplayInfo {
     /// Create from app path and loaded metadata
-    fn from_metadata(path: &str, metadata: &AppMetadata) -> Self {
-        // Build full icon path
-        let icon = format!("{}{}", path, metadata.icon);
+    /// If icon is a file path (not FA class), load from VFS and convert to data URL
+    async fn from_metadata(path: &str, metadata: &AppMetadata) -> Self {
+        let icon = if metadata.icon.starts_with("fa-") || metadata.icon.starts_with("fas ") || metadata.icon.starts_with("far ") {
+            // FontAwesome icon - use as-is
+            metadata.icon.clone()
+        } else {
+            // File icon - load from VFS and convert to data URL
+            let icon_path = filesystem::path::join(path, &metadata.icon);
+            match filesystem::vfs::read_file(&icon_path).await {
+                Ok(bytes) => {
+                    let mime = filesystem::path::mime_type(&icon_path)
+                        .unwrap_or_else(|| "application/octet-stream".to_string());
+                    let base64_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    format!("data:{};base64,{}", mime, base64_data)
+                }
+                Err(e) => {
+                    web_sys::console::warn_1(&format!("[Taskbar] Could not load icon {}: {}", icon_path, e).into());
+                    "fa-solid fa-cube".to_string()
+                }
+            }
+        };
         Self {
             path: path.to_string(),
             id: metadata.id.clone(),
@@ -28,10 +48,10 @@ impl AppDisplayInfo {
         }
     }
 
-    /// Check if icon is an image path (not FontAwesome class)
+    /// Check if icon is an image (data URL or path with extension)
     pub fn is_image_icon(&self) -> bool {
-        // Image paths contain dots (file extension) or start with /
-        self.icon.contains('.') || self.icon.starts_with('/')
+        // Data URLs or paths with file extensions
+        self.icon.starts_with("data:") || self.icon.contains('.')
     }
 }
 
@@ -51,10 +71,10 @@ fn get_mobile_dock_apps(pinned: &[AppDisplayInfo]) -> Vec<AppDisplayInfo> {
     pinned.iter().take(3).cloned().collect()
 }
 
-/// Render an app icon - handles both image paths and FontAwesome classes
+/// Render an app icon - handles both image paths/data URLs and FontAwesome classes
 fn render_icon(icon: &str, class: &str) -> Html {
-    if icon.contains('.') || icon.starts_with('/') {
-        // Image icon - use fixed size with object-fit
+    if icon.starts_with("data:") || icon.starts_with('/') || (icon.contains('.') && !icon.starts_with("fa")) {
+        // Image icon (data URL, absolute path, or file with extension) - use fixed size with object-fit
         html! {
             <img
                 class={class.to_string()}
@@ -73,7 +93,7 @@ fn render_icon(icon: &str, class: &str) -> Html {
 
 /// Render an app icon for start menu (larger)
 fn render_menu_icon(icon: &str) -> Html {
-    if icon.contains('.') || icon.starts_with('/') {
+    if icon.starts_with("data:") || icon.starts_with('/') || (icon.contains('.') && !icon.starts_with("fa")) {
         html! {
             <img
                 src={icon.to_string()}
@@ -144,7 +164,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     for app in &pinned {
                         match fetch_app_metadata(&app.path).await {
                             Ok(metadata) => {
-                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
                             }
                             Err(e) => {
                                 web_sys::console::error_1(
@@ -161,7 +181,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     for app in &available {
                         match fetch_app_metadata(&app.path).await {
                             Ok(metadata) => {
-                                all_display.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                                all_display.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
                             }
                             Err(e) => {
                                 web_sys::console::warn_1(
@@ -252,7 +272,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                         let mut display_apps = Vec::new();
                         for app in &pinned {
                             if let Ok(metadata) = fetch_app_metadata(&app.path).await {
-                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
                             }
                         }
                         pinned_apps.set(display_apps);
@@ -285,7 +305,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                         let mut display_apps = Vec::new();
                         for app in &pinned {
                             if let Ok(metadata) = fetch_app_metadata(&app.path).await {
-                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata));
+                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
                             }
                         }
                         pinned_apps.set(display_apps);

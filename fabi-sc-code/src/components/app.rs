@@ -1,3 +1,4 @@
+use base64::Engine;
 use gloo_timers::future::TimeoutFuture;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -231,15 +232,25 @@ pub fn app() -> Html {
                                     let icon_raw = meta.get("icon")
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("fa-solid fa-cube");
-                                    // If icon is a file path (not FA class), make it relative to server
+                                    // If icon is a file path (not FA class), load from VFS and convert to data URL
                                     let icon = if icon_raw.starts_with("fa-") || icon_raw.starts_with("fas ") || icon_raw.starts_with("far ") {
                                         icon_raw.to_string()
                                     } else {
-                                        // Convert VFS path to server path for images
-                                        // app_path_async is like "/home/.system/apps/terminal/"
-                                        // We need "/resources/apps/terminal/icon.png"
-                                        let app_name = app_id_async.clone();
-                                        format!("/resources/apps/{}/{}", app_name, icon_raw)
+                                        // Build VFS path to icon (relative to app directory)
+                                        let icon_path = filesystem::path::join(&app_path_async, icon_raw);
+                                        // Try to load icon from VFS and convert to data URL
+                                        match filesystem::vfs::read_file(&icon_path).await {
+                                            Ok(bytes) => {
+                                                let mime = filesystem::path::mime_type(&icon_path)
+                                                    .unwrap_or_else(|| "application/octet-stream".to_string());
+                                                let base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                                                format!("data:{};base64,{}", mime, base64)
+                                            }
+                                            Err(e) => {
+                                                web_sys::console::warn_1(&format!("[App] Could not load icon {}: {}", icon_path, e).into());
+                                                "fa-solid fa-cube".to_string()
+                                            }
+                                        }
                                     };
                                     let width = meta.get("window")
                                         .and_then(|w| w.get("width"))

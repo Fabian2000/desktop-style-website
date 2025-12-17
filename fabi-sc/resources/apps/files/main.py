@@ -232,13 +232,15 @@ _saved_path = state.get("current_path")
 current_path = _saved_path if _saved_path else "/home/Desktop"
 _saved_index = state.get("selected_index")
 selected_index = int(_saved_index) if _saved_index else -1
-modal_type = None  # "new_file", "new_folder", "rename", "delete", "open_with"
+_saved_modal = state.get("modal_type")
+modal_type = _saved_modal if _saved_modal else None  # "new_file", "new_folder", "rename", "delete", "open_with"
 entries = []
 available_apps = []  # Apps that can open selected file
 
 def save_state():
     state.set("current_path", current_path)
     state.set("selected_index", str(selected_index))
+    state.set("modal_type", modal_type if modal_type else "")
 
 def get_icon_for_file(name, is_dir):
     if is_dir:
@@ -488,28 +490,33 @@ def open_app_4():
 def show_new_file_modal():
     global modal_type
     modal_type = "new_file"
+    save_state()
     render()
 
 def show_new_folder_modal():
     global modal_type
     modal_type = "new_folder"
+    save_state()
     render()
 
 def show_rename_modal():
     global modal_type
     if selected_index >= 0:
         modal_type = "rename"
+        save_state()
         render()
 
 def show_delete_modal():
     global modal_type
     if selected_index >= 0:
         modal_type = "delete"
+        save_state()
         render()
 
 def close_modal():
     global modal_type
     modal_type = None
+    save_state()
     render()
 
 def on_input(value):
@@ -536,6 +543,7 @@ def confirm_new_file(value):
     else:
         print("[Files] No filename provided, skipping file creation")
     modal_type = None
+    save_state()
     render()
 
 def confirm_new_folder(value):
@@ -547,6 +555,7 @@ def confirm_new_folder(value):
         except Exception as e:
             print(f"Error creating folder: {e}")
     modal_type = None
+    save_state()
     render()
 
 def confirm_rename(value):
@@ -561,6 +570,7 @@ def confirm_rename(value):
             print(f"Error renaming: {e}")
     modal_type = None
     selected_index = -1
+    save_state()
     render()
 
 def confirm_delete():
@@ -574,6 +584,7 @@ def confirm_delete():
             print(f"Error deleting: {e}")
     modal_type = None
     selected_index = -1
+    save_state()
     render()
 
 def on_back():

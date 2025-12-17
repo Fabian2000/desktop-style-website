@@ -133,6 +133,28 @@ pub fn render_input(placeholder: &str, on_submit: Option<&str>, name: Option<&st
     )
 }
 
+/// Render a textarea (multi-line input)
+/// value: initial text content
+/// on_change: Python function to call when content changes (receives new value)
+/// name: data-name attribute for targeting
+pub fn render_textarea(value: &str, on_change: Option<&str>, name: Option<&str>, style: &Style) -> String {
+    let id = generate_widget_id();
+    let on_change_attr = on_change
+        .map(|name| format!(r#" data-on-change="{}""#, sanitizer::sanitize_attribute(name)))
+        .unwrap_or_default();
+    let name_attr = name
+        .map(|n| format!(r#" data-name="{}""#, sanitizer::sanitize_attribute(n)))
+        .unwrap_or_default();
+    format!(
+        r#"<textarea class="ui-textarea" data-widget-id="{}"{}{}{} spellcheck="false">{}</textarea>"#,
+        sanitizer::sanitize_attribute(&id),
+        on_change_attr,
+        name_attr,
+        style.to_inline(),
+        sanitizer::escape_html(value)
+    )
+}
+
 /// Render a container (div)
 /// If on_click is provided, the container will dispatch a click event to call the Python function
 pub fn render_container(children: &str, on_click: Option<&str>, style: &Style) -> String {

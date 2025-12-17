@@ -63,7 +63,7 @@ pub struct TaskbarProps {
     #[prop_or_default]
     pub open_apps: Vec<String>,  // All open app IDs (for running indicator)
     #[prop_or_default]
-    pub on_app_click: Callback<String>,  // Emits app_id
+    pub on_app_click: Callback<(String, Vec<String>)>,  // Emits (app_id, args)
 }
 
 /// Mobile dock apps (first 3 pinned apps)
@@ -523,7 +523,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                         let on_app_click = props.on_app_click.clone();
                         let app_id = app_id.clone();
                         Callback::from(move |_| {
-                            on_app_click.emit(app_id.clone());
+                            on_app_click.emit((app_id.clone(), vec![]));
                         })
                     };
                     let on_context = {
@@ -584,7 +584,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                                 let on_app_click = props.on_app_click.clone();
                                 let app_id = app_id.clone();
                                 Callback::from(move |_| {
-                                    on_app_click.emit(app_id.clone());
+                                    on_app_click.emit((app_id.clone(), vec![]));
                                     close_drawer.emit(());
                                 })
                             };
@@ -664,7 +664,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                         let on_app_click = props.on_app_click.clone();
                         let app_id = app_id.clone();
                         Callback::from(move |_| {
-                            on_app_click.emit(app_id.clone());
+                            on_app_click.emit((app_id.clone(), vec![]));
                         })
                     };
 
@@ -698,7 +698,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                             let on_app_click = props.on_app_click.clone();
                             let app_id = app_id.clone();
                             Callback::from(move |_| {
-                                on_app_click.emit(app_id.clone());
+                                on_app_click.emit((app_id.clone(), vec![]));
                                 close_drawer.emit(());
                             })
                         };

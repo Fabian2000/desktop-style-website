@@ -32,6 +32,8 @@ pub struct AppMetadata {
     pub entry: String,
     #[serde(default)]
     pub window: WindowConfig,
+    #[serde(default = "default_true")]
+    pub pinned: bool,
 }
 
 fn default_entry() -> String {
@@ -241,20 +243,30 @@ impl TaskbarDb {
                         let app_path = format!("{}{}/", apps_dir, entry.name);
                         let metadata_path = format!("{}metadata.json", app_path);
 
-                        // Check if metadata.json exists
-                        if filesystem::vfs::exists(&metadata_path).await.unwrap_or(false) {
-                            // Add to available apps
+                        // Check if metadata.json exists and parse it
+                        if let Ok(json) = filesystem::vfs::read_to_string(&metadata_path).await {
+                            // Add to available apps (all apps are launchable)
                             available_apps.push(AvailableApp {
                                 path: app_path.clone(),
                             });
 
-                            // Auto-pin if not already pinned
-                            if !pinned_apps.iter().any(|p| p.path == app_path) {
-                                order += 1;
-                                pinned_apps.push(PinnedApp {
-                                    path: app_path,
-                                    order,
-                                });
+                            // Check if app should be pinned (default: true)
+                            let should_pin = serde_json::from_str::<AppMetadata>(&json)
+                                .map(|meta| meta.pinned)
+                                .unwrap_or(true);
+
+                            if should_pin {
+                                // Auto-pin if pinned=true and not already pinned
+                                if !pinned_apps.iter().any(|p| p.path == app_path) {
+                                    order += 1;
+                                    pinned_apps.push(PinnedApp {
+                                        path: app_path,
+                                        order,
+                                    });
+                                }
+                            } else {
+                                // Remove from pinned if pinned=false (sync with metadata)
+                                pinned_apps.retain(|p| p.path != app_path);
                             }
                         }
                     }

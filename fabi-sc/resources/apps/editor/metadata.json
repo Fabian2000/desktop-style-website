@@ -1,0 +1,23 @@
+{
+  "id": "editor",
+  "name": "Text Editor",
+  "version": "1.0.0",
+  "description": "Simple text editor for FabiScOS",
+  "author": "FabiScOS",
+  "icon": "icon.png",
+  "entry": "main.py",
+  "pinned": false,
+  "window": {
+    "width": 700,
+    "height": 500,
+    "resizable": true,
+    "min_width": 400,
+    "min_height": 300
+  },
+  "file_handlers": [
+    {
+      "name": "Edit Text File",
+      "extensions": ["txt", "md", "json", "log", "py", "js", "html", "css", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf"]
+    }
+  ]
+}

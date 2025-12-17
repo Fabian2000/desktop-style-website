@@ -594,6 +594,22 @@ mod fabiscos_ui {
         ui::render_input(&placeholder, on_submit.as_deref(), name.as_deref(), &s)
     }
 
+    /// Textarea (multi-line input)
+    /// Usage: ui.textarea(content, style=my_style, on_change="handle_change", name="editor")
+    /// The on_change parameter specifies the Python function to call when content changes
+    #[pyfunction]
+    fn textarea(value: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {
+        let mut kw: std::collections::HashMap<String, String> = kwargs
+            .into_iter()
+            .map(|(k, v)| (k.as_str().to_string(), v.as_str().to_string()))
+            .collect();
+        let base_style = kw.remove("style");
+        let on_change = kw.remove("on_change");
+        let name = kw.remove("name");
+        let s = extract_style_from_kwargs(&mut kw, base_style.as_deref());
+        ui::render_textarea(&value, on_change.as_deref(), name.as_deref(), &s)
+    }
+
     /// Checkbox element
     #[pyfunction]
     fn checkbox(label_text: String, kwargs: KwArgs<PyStrRef>, _vm: &VirtualMachine) -> String {

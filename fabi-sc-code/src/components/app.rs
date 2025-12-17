@@ -66,6 +66,8 @@ pub struct OpenWindow {
     pub python_code: Option<String>,
     /// App's base path in VFS
     pub app_path: String,
+    /// Command line arguments passed to the app
+    pub args: Vec<String>,
 }
 
 #[function_component(App)]
@@ -187,12 +189,17 @@ pub fn app() -> Html {
         let next_z_index = next_z_index.clone();
         let active_window = active_window.clone();
         let window_counter = window_counter.clone();
-        Callback::from(move |app_id: String| {
-            // Check if a window with this app_id already exists
-            let existing_window = open_windows
-                .iter()
-                .find(|(_, w)| w.app_id == app_id)
-                .map(|(id, _)| id.clone());
+        Callback::from(move |(app_id, args): (String, Vec<String>)| {
+            // If args are provided (e.g., opening a file), always create a new window
+            // Otherwise, check if a window with this app_id already exists
+            let existing_window = if args.is_empty() {
+                open_windows
+                    .iter()
+                    .find(|(_, w)| w.app_id == app_id)
+                    .map(|(id, _)| id.clone())
+            } else {
+                None // Always create new window when opening a file
+            };
 
             if let Some(window_id) = existing_window {
                 // Focus and restore existing window
@@ -220,7 +227,7 @@ pub fn app() -> Html {
                 // Determine app path based on app type
                 // System apps: /home/.system/apps/{app_id}/
                 // User apps: /home/apps/{app_id}/
-                let app_path = if matches!(app_id.as_str(), "terminal" | "files" | "settings" | "help") {
+                let app_path = if matches!(app_id.as_str(), "terminal" | "files" | "settings" | "help" | "editor") {
                     format!("/home/.system/apps/{}/", app_id)
                 } else {
                     format!("/home/apps/{}/", app_id)
@@ -233,6 +240,7 @@ pub fn app() -> Html {
                 let app_id_async = app_id.clone();
                 let app_path_async = app_path.clone();
                 let z_async = z;
+                let args_async = args.clone();
 
                 spawn_local(async move {
                     // Try to read metadata.json from app directory
@@ -324,6 +332,7 @@ pub fn app() -> Html {
                         minimized: false,
                         python_code,
                         app_path: app_path_async,
+                        args: args_async,
                     };
 
                     let mut windows = (*open_windows_async).clone();
@@ -425,9 +434,12 @@ pub fn app() -> Html {
         let on_app_click = on_app_click.clone();
         Callback::from(move |(app_id, file_path): (String, Option<String>)| {
             web_sys::console::log_1(&format!("[App] Launch request: {} with file: {:?}", app_id, file_path).into());
-            // TODO: Pass file_path to the app somehow (via global state or extending OpenWindow)
-            // For now, just launch the app
-            on_app_click.emit(app_id);
+            // Pass file_path as first argument if present
+            let args = match file_path {
+                Some(path) => vec![path],
+                None => vec![],
+            };
+            on_app_click.emit((app_id, args));
         })
     };
 
@@ -597,6 +609,7 @@ pub fn app() -> Html {
                         z_index={window.z_index}
                         python_code={window.python_code.clone()}
                         app_path={window.app_path.clone()}
+                        args={window.args.clone()}
                         minimized={window.minimized}
                         on_close={on_close}
                         on_focus={on_focus}

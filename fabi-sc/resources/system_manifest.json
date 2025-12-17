@@ -12,19 +12,9 @@
       }
     },
     {
-      "path": "/home/Desktop/README.txt",
-      "server_path": "/resources/files/desktop_readme.txt",
-      "hash": "readme_v1",
-      "permissions": {
-        "readonly": true,
-        "system": true,
-        "hidden": false
-      }
-    },
-    {
       "path": "/home/.system/apps/terminal/metadata.json",
       "server_path": "/resources/apps/terminal/metadata.json",
-      "hash": "terminal_meta_v4",
+      "hash": "terminal_meta_v5",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -94,7 +84,7 @@
     {
       "path": "/home/.system/apps/files/main.py",
       "server_path": "/resources/apps/files/main.py",
-      "hash": "files_main_v11",
+      "hash": "files_main_v12",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -105,6 +95,36 @@
       "path": "/home/.system/apps/files/icon.png",
       "server_path": "/resources/apps/files/icon.png",
       "hash": "files_icon_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/editor/metadata.json",
+      "server_path": "/resources/apps/editor/metadata.json",
+      "hash": "editor_meta_v2",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/editor/main.py",
+      "server_path": "/resources/apps/editor/main.py",
+      "hash": "editor_main_v4",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/editor/icon.png",
+      "server_path": "/resources/apps/editor/icon.png",
+      "hash": "editor_icon_v1",
       "permissions": {
         "readonly": true,
         "system": true,

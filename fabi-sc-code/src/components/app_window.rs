@@ -6,7 +6,7 @@
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use web_sys::{MouseEvent, KeyboardEvent, HtmlInputElement};
+use web_sys::{MouseEvent, KeyboardEvent, InputEvent, HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
 use crate::python::runtime::{PythonRuntime, AppExecResult};
@@ -43,6 +43,9 @@ pub struct AppWindowProps {
     /// App's base path for VFS operations
     #[prop_or_default]
     pub app_path: String,
+    /// Command line arguments passed to the app
+    #[prop_or_default]
+    pub args: Vec<String>,
     /// Whether window is minimized (controlled by parent)
     #[prop_or(false)]
     pub minimized: bool,
@@ -105,22 +108,27 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     // Store the button click handler for re-execution (when button with on_click is pressed)
     let pending_click = use_mut_ref(|| None::<String>);
 
+    // Store the change handler and value for textareas with on_change
+    let pending_change = use_mut_ref(|| None::<(String, String)>);
+
     // Trigger for re-running the app (incremented on input submit or back press)
     // Using use_state for the actual trigger, plus a Cell to track the count
     // in closures that don't have access to current state
     let run_counter = use_state(|| 0u32);
     let run_counter_cell = use_mut_ref(|| 0u32);
 
-    // Helper function to run app code with optional input, back event, or click handler
+    // Helper function to run app code with optional input, back event, click handler, or change event
     // Returns (close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request)
     fn run_app(
         code: &str,
         input: Option<&str>,
         back_pressed: bool,
         click_handler: Option<&str>,
+        change_handler: Option<(&str, &str)>,  // (handler_name, value)
         window_id: &str,
         app_id: &str,
         app_path: &str,
+        args: &[String],
         app_content: &UseStateHandle<Option<String>>,
         app_error: &UseStateHandle<Option<String>>,
         runtime_title: &UseStateHandle<Option<String>>,
@@ -133,6 +141,16 @@ pub fn app_window(props: &AppWindowProps) -> Html {
             app_id.to_string(),
             app_path.to_string(),
         );
+
+        // Build args list as Python code: __args__ = ["arg1", "arg2", ...]
+        let args_python = if args.is_empty() {
+            "__args__ = []\n".to_string()
+        } else {
+            let escaped: Vec<String> = args.iter()
+                .map(|a| format!("\"{}\"", a.replace('\\', "\\\\").replace('"', "\\\"")))
+                .collect();
+            format!("__args__ = [{}]\n", escaped.join(", "))
+        };
 
         // Prepare code with input/back/click injection if needed
         let full_code = if let Some(input_val) = input {
@@ -180,9 +198,29 @@ if '__click_handler__' in dir() and __click_handler__:
                 handler.replace('\\', "\\\\").replace('"', "\\\""),
                 code
             )
+        } else if let Some((handler, value)) = change_handler {
+            // Inject __change_handler__ and __change_value__ and call the specified function
+            web_sys::console::log_1(&format!("[Python] Injecting change handler: {} with value length: {}", handler, value.len()).into());
+            format!(
+                r#"__change_handler__ = "{}"
+__change_value__ = """{}"""
+{}
+if '__change_handler__' in dir() and __change_handler__:
+    if __change_handler__ in dir():
+        eval(__change_handler__ + "(__change_value__)")
+    else:
+        print("[Python] WARNING: " + __change_handler__ + " not defined!")
+"#,
+                handler.replace('\\', "\\\\").replace('"', "\\\""),
+                value.replace('\\', "\\\\").replace("\"\"\"", "\\\"\\\"\\\""),
+                code
+            )
         } else {
             code.to_string()
         };
+
+        // Prepend args to the code
+        let full_code = format!("{}{}", args_python, full_code);
 
         // Execute the code
         match runtime.run(&full_code) {
@@ -253,15 +291,19 @@ if '__click_handler__' in dir() and __click_handler__:
                 let back_pressed = std::mem::replace(&mut *pending_back.borrow_mut(), false);
                 // Take pending click handler
                 let click_handler = pending_click.borrow_mut().take();
+                // Take pending change handler (for textareas)
+                let change_handler = pending_change.borrow_mut().take();
 
                 let (close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request) = run_app(
                     code,
                     input.as_deref(),
                     back_pressed,
                     click_handler.as_deref(),
+                    change_handler.as_ref().map(|(h, v)| (h.as_str(), v.as_str())),
                     &window_id,
                     &app_id,
                     &app_path,
+                    &props.args,
                     &app_content,
                     &app_error,
                     &runtime_title,
@@ -373,6 +415,35 @@ if '__click_handler__' in dir() and __click_handler__:
                             };
                             run_counter.set(new_val);
                         }
+                    }
+                }
+            }
+        })
+    };
+
+    // Input handler for textareas with data-on-change attribute
+    let on_input = {
+        let pending_change = pending_change.clone();
+        let run_counter = run_counter.clone();
+        let run_counter_cell = run_counter_cell.clone();
+        Callback::from(move |e: InputEvent| {
+            // Check if the target is a textarea with data-on-change
+            if let Some(target) = e.target() {
+                if let Ok(textarea) = target.dyn_into::<HtmlTextAreaElement>() {
+                    if let Some(handler) = textarea.get_attribute("data-on-change") {
+                        let value = textarea.value();
+                        web_sys::console::log_1(&format!("[Textarea] Input changed, handler: {}, length: {}", handler, value.len()).into());
+
+                        // Set the pending change (handler name + value) and trigger re-run
+                        *pending_change.borrow_mut() = Some((handler, value));
+                        // Increment counter via cell (always has current value)
+                        // then set state to trigger re-render
+                        let new_val = {
+                            let mut cell = run_counter_cell.borrow_mut();
+                            *cell = cell.wrapping_add(1);
+                            *cell
+                        };
+                        run_counter.set(new_val);
                     }
                 }
             }
@@ -768,6 +839,7 @@ if '__click_handler__' in dir() and __click_handler__:
             data-window-id={props.window_id.clone()}
             onmousedown={on_window_mousedown}
             onkeydown={on_keydown}
+            oninput={on_input}
             onclick={on_click}
         >
             // Desktop: Title bar with window controls

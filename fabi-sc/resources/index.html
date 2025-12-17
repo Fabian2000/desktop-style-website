@@ -114,9 +114,10 @@
                 async _loadCache() {
                     if (!this._db) return;
 
-                    const tx = this._db.transaction(['nodes'], 'readonly');
+                    // Load nodes
+                    const nodeTx = this._db.transaction(['nodes'], 'readonly');
                     const nodes = await new Promise((resolve, reject) => {
-                        const request = tx.objectStore('nodes').getAll();
+                        const request = nodeTx.objectStore('nodes').getAll();
                         request.onsuccess = () => resolve(request.result || []);
                         request.onerror = () => reject(request.error);
                     });
@@ -137,7 +138,40 @@
                         });
                     }
 
-                    console.log('[VFS Sync] Loaded', nodes.length, 'nodes into cache');
+                    // Load file contents
+                    const contentTx = this._db.transaction(['content'], 'readonly');
+                    const contents = await new Promise((resolve, reject) => {
+                        const request = contentTx.objectStore('content').getAll();
+                        request.onsuccess = () => resolve(request.result || []);
+                        request.onerror = () => reject(request.error);
+                    });
+                    const contentKeys = await new Promise((resolve, reject) => {
+                        const request = contentTx.objectStore('content').getAllKeys();
+                        request.onsuccess = () => resolve(request.result || []);
+                        request.onerror = () => reject(request.error);
+                    });
+
+                    // Match content to cache entries by path (key)
+                    for (let i = 0; i < contentKeys.length; i++) {
+                        const path = contentKeys[i];
+                        const contentData = contents[i];
+                        const entry = this._cache.get(path);
+                        if (entry && entry.type === 'file' && contentData) {
+                            // Content is stored as Uint8Array, convert to string for text files
+                            if (contentData instanceof Uint8Array || contentData.buffer) {
+                                try {
+                                    entry.content = new TextDecoder().decode(contentData);
+                                } catch (e) {
+                                    // Binary file, store as bytes
+                                    entry.bytes = contentData;
+                                }
+                            } else if (typeof contentData === 'string') {
+                                entry.content = contentData;
+                            }
+                        }
+                    }
+
+                    console.log('[VFS Sync] Loaded', nodes.length, 'nodes and', contentKeys.length, 'contents into cache');
                 },
 
                 // Refresh cache from IndexedDB (called after Rust VFS init)

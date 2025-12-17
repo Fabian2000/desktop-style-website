@@ -17,10 +17,6 @@
     {
       "name": "Run Python Script",
       "extensions": ["py"]
-    },
-    {
-      "name": "View Text File",
-      "extensions": ["txt", "md", "json", "log"]
     }
   ]
 }

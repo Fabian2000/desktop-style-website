@@ -71,10 +71,13 @@ content_style = ui.style(
     flex="1",
     padding="16px",
     overflow_y="auto",
+    overflow_x="hidden",
     color="#e0e0e0",
     line_height="1.5",
     background="#1a1a2e",
     min_height="0",
+    width="100%",
+    box_sizing="border-box",
     word_wrap="break-word",
     overflow_wrap="break-word"
 )
@@ -120,9 +123,9 @@ code_style = ui.style(
     font_family="'Cascadia Code', 'Fira Code', monospace",
     font_size="12px",
     color="#7dd3fc",
-    overflow_x="auto",
     margin="8px 0",
-    white_space="pre"
+    white_space="pre-wrap",
+    word_break="break-word"
 )
 
 para_style = ui.style(
@@ -523,9 +526,10 @@ def render():
     # Content area
     mobile_parts.append(ui.container(content_parts, style=content_style))
 
+    mobile_wrapper_style = ui.style(height="100%")
     mobile_html = ui.mobile_only([
         ui.column(mobile_parts, style=mobile_container_style)
-    ])
+    ], style=mobile_wrapper_style)
 
     # Combine both layouts - needs height 100% to fill .app-ui
     wrapper_style = ui.style(height="100%")

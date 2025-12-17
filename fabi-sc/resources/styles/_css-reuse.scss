@@ -39,6 +39,13 @@ code,
     -webkit-user-select: text;
 }
 
+// Pre tags should wrap on mobile
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
 // Custom scrollbar - system-wide
 * {
     scrollbar-width: thin;

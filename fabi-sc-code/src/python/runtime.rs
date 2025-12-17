@@ -51,6 +51,10 @@ pub struct AppState {
     pub focus_selector: Option<String>,
     /// Element name to scroll to bottom (via data-name attribute)
     pub scroll_to_bottom: Option<String>,
+    /// Request to launch another app (app_id, optional file_path)
+    pub launch_app_request: Option<(String, Option<String>)>,
+    /// Request to open a file with the system handler (file_path)
+    pub open_file_request: Option<String>,
 }
 
 impl AppState {
@@ -66,6 +70,8 @@ impl AppState {
             output_lines: Vec::new(),
             focus_selector: None,
             scroll_to_bottom: None,
+            launch_app_request: None,
+            open_file_request: None,
         }
     }
 }
@@ -224,6 +230,16 @@ sys.stderr = ConsoleWriter()
     /// Take the scroll_to_bottom target (returns Some(name) if scroll was requested, and clears it)
     pub fn take_scroll_to_bottom(&self) -> Option<String> {
         self.state.borrow_mut().scroll_to_bottom.take()
+    }
+
+    /// Take the launch_app request (app_id, file_path)
+    pub fn take_launch_app_request(&self) -> Option<(String, Option<String>)> {
+        self.state.borrow_mut().launch_app_request.take()
+    }
+
+    /// Take the open_file request (file_path)
+    pub fn take_open_file_request(&self) -> Option<String> {
+        self.state.borrow_mut().open_file_request.take()
     }
 }
 
@@ -875,6 +891,24 @@ mod fabiscos_system {
         get_current_state()
             .map(|s| s.borrow().window_id.clone())
             .unwrap_or_default()
+    }
+
+    /// Launch an app with an optional file path
+    /// The app will be opened and receive the file_path as an argument
+    #[pyfunction]
+    fn launch_app(app_id: String, file_path: Option<String>, _vm: &VirtualMachine) {
+        if let Some(state) = get_current_state() {
+            state.borrow_mut().launch_app_request = Some((app_id, file_path));
+        }
+    }
+
+    /// Open a file with the system file handler
+    /// The system will find apps that can handle this file type and show a picker if needed
+    #[pyfunction]
+    fn open_file(file_path: String, _vm: &VirtualMachine) {
+        if let Some(state) = get_current_state() {
+            state.borrow_mut().open_file_request = Some(file_path);
+        }
     }
 }
 

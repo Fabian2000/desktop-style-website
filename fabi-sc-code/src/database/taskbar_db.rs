@@ -215,42 +215,60 @@ impl TaskbarDb {
         self.set_pinned(apps).await
     }
 
-    /// Default pinned apps for new users
+    /// Default pinned apps for new users - empty, apps are discovered from VFS
     fn default_pinned() -> Vec<PinnedApp> {
-        vec![
-            PinnedApp {
-                path: "/home/.system/apps/terminal/".to_string(),
-                order: 0,
-            },
-            PinnedApp {
-                path: "/home/.system/apps/help/".to_string(),
-                order: 1,
-            },
-        ]
+        vec![]
     }
 
-    /// Default available apps
+    /// Default available apps - empty, apps are discovered from VFS
     fn default_apps() -> Vec<AvailableApp> {
-        // Only include apps that actually exist with metadata.json
-        vec![
-            AvailableApp { path: "/home/.system/apps/terminal/".to_string() },
-            AvailableApp { path: "/home/.system/apps/help/".to_string() },
-        ]
+        vec![]
     }
 
-    /// Ensure essential app (Help) is pinned for new/existing users
-    pub async fn ensure_help_pinned(&self) -> Result<(), String> {
-        let help_path = "/home/.system/apps/help/";
-        let mut pinned = self.get_pinned().await;
+    /// Discover and register all apps from VFS /home/.system/apps/ directory
+    pub async fn discover_apps(&self) -> Result<(), String> {
+        let apps_dir = "/home/.system/apps/";
 
-        if !pinned.iter().any(|p| p.path == help_path) {
-            let order = pinned.iter().map(|a| a.order).max().unwrap_or(0) + 1;
-            pinned.push(PinnedApp {
-                path: help_path.to_string(),
-                order,
-            });
-            self.set_pinned(pinned).await?;
-            web_sys::console::log_1(&"[Taskbar] Auto-pinned Help app".into());
+        // List all subdirectories in the apps folder
+        match filesystem::vfs::read_dir(apps_dir).await {
+            Ok(entries) => {
+                let mut available_apps = Vec::new();
+                let mut pinned_apps = self.get_pinned().await;
+                let mut order = pinned_apps.iter().map(|a| a.order).max().unwrap_or(0);
+
+                for entry in entries {
+                    if entry.is_dir() {
+                        let app_path = format!("{}{}/", apps_dir, entry.name);
+                        let metadata_path = format!("{}metadata.json", app_path);
+
+                        // Check if metadata.json exists
+                        if filesystem::vfs::exists(&metadata_path).await.unwrap_or(false) {
+                            // Add to available apps
+                            available_apps.push(AvailableApp {
+                                path: app_path.clone(),
+                            });
+
+                            // Auto-pin if not already pinned
+                            if !pinned_apps.iter().any(|p| p.path == app_path) {
+                                order += 1;
+                                pinned_apps.push(PinnedApp {
+                                    path: app_path,
+                                    order,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Save discovered apps
+                self.set_all_apps(available_apps).await?;
+                self.set_pinned(pinned_apps).await?;
+
+                web_sys::console::log_1(&"[Taskbar] Apps discovered from VFS".into());
+            }
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[Taskbar] Could not read apps directory: {:?}", e).into());
+            }
         }
 
         Ok(())

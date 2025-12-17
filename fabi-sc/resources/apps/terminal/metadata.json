@@ -12,5 +12,15 @@
     "resizable": true,
     "min_width": 300,
     "min_height": 200
-  }
+  },
+  "file_handlers": [
+    {
+      "name": "Run Python Script",
+      "extensions": ["py"]
+    },
+    {
+      "name": "View Text File",
+      "extensions": ["txt", "md", "json", "log"]
+    }
+  ]
 }

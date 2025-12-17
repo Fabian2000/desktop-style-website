@@ -24,7 +24,7 @@
     {
       "path": "/home/.system/apps/terminal/metadata.json",
       "server_path": "/resources/apps/terminal/metadata.json",
-      "hash": "terminal_meta_v3",
+      "hash": "terminal_meta_v4",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -75,6 +75,36 @@
       "path": "/home/.system/apps/help/icon.png",
       "server_path": "/resources/apps/help/icon.png",
       "hash": "help_icon_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/files/metadata.json",
+      "server_path": "/resources/apps/files/metadata.json",
+      "hash": "files_meta_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/files/main.py",
+      "server_path": "/resources/apps/files/main.py",
+      "hash": "files_main_v11",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/files/icon.png",
+      "server_path": "/resources/apps/files/icon.png",
+      "hash": "files_icon_v1",
       "permissions": {
         "readonly": true,
         "system": true,

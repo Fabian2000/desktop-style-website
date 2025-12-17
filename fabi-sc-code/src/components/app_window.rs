@@ -56,6 +56,10 @@ pub struct AppWindowProps {
     pub on_back: Callback<()>,  // Back button pressed (for Python apps)
     #[prop_or_default]
     pub on_show_recents: Callback<()>,  // Show recents/app switcher
+    #[prop_or_default]
+    pub on_launch_app: Callback<(String, Option<String>)>,  // Launch another app (app_id, file_path)
+    #[prop_or_default]
+    pub on_open_file: Callback<String>,  // Open a file with system handler (file_path)
 }
 
 /// Check if we're on a mobile device (portrait orientation)
@@ -107,9 +111,9 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     let run_counter = use_state(|| 0u32);
     let run_counter_cell = use_mut_ref(|| 0u32);
 
-    // Helper function to run Python code with optional input, back event, or click handler
-    // Returns (close_requested, focus_selector, scroll_to_bottom)
-    fn run_python_app(
+    // Helper function to run app code with optional input, back event, or click handler
+    // Returns (close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request)
+    fn run_app(
         code: &str,
         input: Option<&str>,
         back_pressed: bool,
@@ -120,7 +124,7 @@ pub fn app_window(props: &AppWindowProps) -> Html {
         app_content: &UseStateHandle<Option<String>>,
         app_error: &UseStateHandle<Option<String>>,
         runtime_title: &UseStateHandle<Option<String>>,
-    ) -> (bool, Option<String>, Option<String>) {
+    ) -> (bool, Option<String>, Option<String>, Option<(String, Option<String>)>, Option<String>) {
         web_sys::console::log_1(&format!("[Python] Running app: {} ({})", app_id, window_id).into());
 
         // Create Python runtime for this app
@@ -210,12 +214,14 @@ if '__click_handler__' in dir() and __click_handler__:
             }
         }
 
-        // Return close_requested, focus_selector, and scroll_to_bottom
+        // Return close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request
         let close_req = runtime.close_requested();
         let focus_sel = runtime.take_focus_selector();
         let scroll_bottom = runtime.take_scroll_to_bottom();
-        web_sys::console::log_1(&format!("[Python] close_requested = {}, focus_selector = {:?}, scroll_to_bottom = {:?}", close_req, focus_sel, scroll_bottom).into());
-        (close_req, focus_sel, scroll_bottom)
+        let launch_req = runtime.take_launch_app_request();
+        let open_file_req = runtime.take_open_file_request();
+        web_sys::console::log_1(&format!("[Python] close_requested = {}, focus_selector = {:?}, scroll_to_bottom = {:?}, launch_app = {:?}, open_file = {:?}", close_req, focus_sel, scroll_bottom, launch_req, open_file_req).into());
+        (close_req, focus_sel, scroll_bottom, launch_req, open_file_req)
     }
 
     // Run Python code when it's provided or when input is submitted or back is pressed
@@ -248,7 +254,7 @@ if '__click_handler__' in dir() and __click_handler__:
                 // Take pending click handler
                 let click_handler = pending_click.borrow_mut().take();
 
-                let (close_requested, focus_selector, scroll_to_bottom) = run_python_app(
+                let (close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request) = run_app(
                     code,
                     input.as_deref(),
                     back_pressed,
@@ -265,6 +271,18 @@ if '__click_handler__' in dir() and __click_handler__:
                 if close_requested {
                     web_sys::console::log_1(&"[Python] App requested window close".into());
                     props.on_close.emit(());
+                }
+
+                // If Python requested to launch another app, emit the callback
+                if let Some((target_app_id, file_path)) = launch_app_request {
+                    web_sys::console::log_1(&format!("[Python] App requested launch: {} with file: {:?}", target_app_id, file_path).into());
+                    props.on_launch_app.emit((target_app_id, file_path));
+                }
+
+                // If Python requested to open a file, emit the callback
+                if let Some(file_path) = open_file_request {
+                    web_sys::console::log_1(&format!("[Python] App requested open file: {}", file_path).into());
+                    props.on_open_file.emit(file_path);
                 }
 
                 // If Python requested focus, do it after DOM update

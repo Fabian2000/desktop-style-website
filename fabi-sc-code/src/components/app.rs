@@ -22,6 +22,24 @@ fn is_boot_complete() -> bool {
         .unwrap_or(false)
 }
 
+/// Info about an app that can handle a file type
+#[derive(Clone, PartialEq)]
+struct FileHandlerApp {
+    app_id: String,
+    app_name: String,
+    app_icon: String,  // FontAwesome class or data URL
+    app_path: String,
+}
+
+/// State for the "Open with" dialog
+#[derive(Clone, PartialEq)]
+struct OpenFileDialogState {
+    file_path: String,
+    extension: String,
+    available_apps: Vec<FileHandlerApp>,
+    loading: bool,
+}
+
 #[derive(Clone, PartialEq)]
 enum AppState {
     Booting,
@@ -401,6 +419,121 @@ pub fn app() -> Html {
         })
     };
 
+    // Launch app callback - called when Python app requests to open another app
+    // (app_id, optional file_path)
+    let on_launch_app: Callback<(String, Option<String>)> = {
+        let on_app_click = on_app_click.clone();
+        Callback::from(move |(app_id, file_path): (String, Option<String>)| {
+            web_sys::console::log_1(&format!("[App] Launch request: {} with file: {:?}", app_id, file_path).into());
+            // TODO: Pass file_path to the app somehow (via global state or extending OpenWindow)
+            // For now, just launch the app
+            on_app_click.emit(app_id);
+        })
+    };
+
+    // State for file open dialog
+    let open_file_dialog = use_state(|| None::<OpenFileDialogState>);
+
+    // Open file callback - called when Python app requests to open a file with system handler
+    let on_open_file: Callback<String> = {
+        let open_file_dialog = open_file_dialog.clone();
+        Callback::from(move |file_path: String| {
+            web_sys::console::log_1(&format!("[System] Open file request: {}", file_path).into());
+            // Get file extension
+            let ext = file_path.rsplit('.').next().unwrap_or("").to_lowercase();
+            // Store the request and trigger app scanning
+            open_file_dialog.set(Some(OpenFileDialogState {
+                file_path,
+                extension: ext,
+                available_apps: Vec::new(),
+                loading: true,
+            }));
+        })
+    };
+
+    // Effect to scan apps when open_file_dialog is set with loading=true
+    {
+        let open_file_dialog = open_file_dialog.clone();
+        let dialog_state = (*open_file_dialog).clone();
+        use_effect_with(dialog_state.clone(), move |state| {
+            if let Some(state) = state {
+                if state.loading {
+                    let ext = state.extension.clone();
+                    let file_path = state.file_path.clone();
+                    let dialog = open_file_dialog.clone();
+                    spawn_local(async move {
+                        // Scan all apps in /home/.system/apps/ for file_handlers
+                        let apps_dir = "/home/.system/apps/";
+                        let mut handlers: Vec<FileHandlerApp> = Vec::new();
+
+                        if let Ok(entries) = filesystem::vfs::read_dir(apps_dir).await {
+                            for entry in entries {
+                                if entry.is_dir() {
+                                    let app_path = format!("{}{}/", apps_dir, entry.name);
+                                    let metadata_path = format!("{}metadata.json", app_path);
+
+                                    if let Ok(json) = filesystem::vfs::read_to_string(&metadata_path).await {
+                                        if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&json) {
+                                            // Check if this app handles the file extension
+                                            if let Some(file_handlers) = meta.get("file_handlers").and_then(|v| v.as_array()) {
+                                                for handler in file_handlers {
+                                                    if let Some(extensions) = handler.get("extensions").and_then(|v| v.as_array()) {
+                                                        let handles_ext = extensions.iter().any(|e| {
+                                                            e.as_str().map(|s| s.to_lowercase() == ext).unwrap_or(false)
+                                                        });
+                                                        if handles_ext {
+                                                            let app_id = meta.get("id").and_then(|v| v.as_str()).unwrap_or(&entry.name).to_string();
+                                                            let app_name = meta.get("name").and_then(|v| v.as_str()).unwrap_or(&entry.name).to_string();
+                                                            let icon_raw = meta.get("icon").and_then(|v| v.as_str()).unwrap_or("fa-solid fa-cube");
+
+                                                            // Load icon if it's a file path
+                                                            let app_icon = if icon_raw.starts_with("fa-") || icon_raw.starts_with("fas ") || icon_raw.starts_with("far ") {
+                                                                icon_raw.to_string()
+                                                            } else {
+                                                                let icon_path = filesystem::path::join(&app_path, icon_raw);
+                                                                match filesystem::vfs::read_file(&icon_path).await {
+                                                                    Ok(bytes) => {
+                                                                        let mime = filesystem::path::mime_type(&icon_path).unwrap_or_else(|| "application/octet-stream".to_string());
+                                                                        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+                                                                        format!("data:{};base64,{}", mime, b64)
+                                                                    }
+                                                                    Err(_) => "fa-solid fa-cube".to_string(),
+                                                                }
+                                                            };
+
+                                                            handlers.push(FileHandlerApp {
+                                                                app_id,
+                                                                app_name,
+                                                                app_icon,
+                                                                app_path: app_path.clone(),
+                                                            });
+                                                            break; // Only add app once even if multiple handlers match
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        web_sys::console::log_1(&format!("[System] Found {} apps for extension '{}'", handlers.len(), ext).into());
+
+                        // Update state with found handlers
+                        dialog.set(Some(OpenFileDialogState {
+                            file_path,
+                            extension: ext,
+                            available_apps: handlers,
+                            loading: false,
+                        }));
+                    });
+                }
+            }
+            || ()
+        });
+    }
+
     // Get active app_id for taskbar highlighting
     let active_app_id = active_window.as_ref().and_then(|wid| {
         open_windows.get(wid).map(|w| w.app_id.clone())
@@ -448,6 +581,8 @@ pub fn app() -> Html {
                     Callback::from(move |_| on_window_close.emit(window_id.clone()))
                 };
                 let on_recents = on_show_recents.clone();
+                let on_launch = on_launch_app.clone();
+                let on_file_open = on_open_file.clone();
                 html! {
                     <AppWindow
                         key={window.id.clone()}
@@ -468,6 +603,8 @@ pub fn app() -> Html {
                         on_minimize={on_minimize}
                         on_back={on_back}
                         on_show_recents={on_recents}
+                        on_launch_app={on_launch}
+                        on_open_file={on_file_open}
                     />
                 }
             })}
@@ -491,6 +628,116 @@ pub fn app() -> Html {
             />
             <OfflineScreen visible={is_offline} />
             <LockScreen visible={show_lock_screen || is_booting} boot_complete={!is_booting} on_login={on_login} />
+
+            // "Open with" system dialog (very high z-index)
+            { render_open_with_dialog(&open_file_dialog, &on_launch_app) }
         </>
+    }
+}
+
+/// Render the "Open with" dialog
+fn render_open_with_dialog(
+    open_file_dialog: &UseStateHandle<Option<OpenFileDialogState>>,
+    on_launch_app: &Callback<(String, Option<String>)>,
+) -> Html {
+    let Some(dialog) = (**open_file_dialog).clone() else {
+        return html! {};
+    };
+
+    let file_name = dialog.file_path.rsplit('/').next().unwrap_or(&dialog.file_path).to_string();
+
+    let on_dismiss = {
+        let open_file_dialog = open_file_dialog.clone();
+        Callback::from(move |_: web_sys::MouseEvent| {
+            open_file_dialog.set(None);
+        })
+    };
+
+    let on_backdrop_click = {
+        let open_file_dialog = open_file_dialog.clone();
+        Callback::from(move |e: web_sys::MouseEvent| {
+            // Only close if clicking directly on backdrop
+            if let Some(target) = e.target() {
+                if let Some(element) = target.dyn_ref::<web_sys::Element>() {
+                    if element.class_list().contains("system-dialog-backdrop") {
+                        open_file_dialog.set(None);
+                    }
+                }
+            }
+        })
+    };
+
+    let content = if dialog.loading {
+        html! {
+            <div style="text-align: center; padding: 20px; color: #888;">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px;"></i>
+                <div style="margin-top: 8px;">{"Searching apps..."}</div>
+            </div>
+        }
+    } else if dialog.available_apps.is_empty() {
+        html! {
+            <div style="text-align: center; padding: 20px; color: #888;">
+                <i class="fa-solid fa-circle-question" style="font-size: 24px; margin-bottom: 8px;"></i>
+                <div>{format!("No app found for .{} files", dialog.extension)}</div>
+            </div>
+        }
+    } else {
+        let apps_html: Vec<Html> = dialog.available_apps.iter().map(|app| {
+            let app_id = app.app_id.clone();
+            let file_path = dialog.file_path.clone();
+            let on_launch_app = on_launch_app.clone();
+            let open_file_dialog = open_file_dialog.clone();
+            let on_click = Callback::from(move |_: web_sys::MouseEvent| {
+                on_launch_app.emit((app_id.clone(), Some(file_path.clone())));
+                open_file_dialog.set(None);
+            });
+            let is_fa_icon = app.app_icon.starts_with("fa-") || app.app_icon.starts_with("fas ") || app.app_icon.starts_with("far ");
+            let icon_html = if is_fa_icon {
+                html! { <i class={app.app_icon.clone()} style="font-size: 24px; color: #4a9eff; width: 32px; text-align: center;"></i> }
+            } else {
+                html! { <img src={app.app_icon.clone()} alt="" style="width: 32px; height: 32px; border-radius: 6px;" /> }
+            };
+            html! {
+                <button
+                    class="open-with-app-btn"
+                    style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; text-align: left; width: 100%; transition: background 0.2s; color: #fff; font-size: 14px;"
+                    onclick={on_click}
+                >
+                    {icon_html}
+                    <span>{&app.app_name}</span>
+                </button>
+            }
+        }).collect();
+
+        html! {
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                { for apps_html }
+            </div>
+        }
+    };
+
+    html! {
+        <div class="system-dialog-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; display: flex; align-items: center; justify-content: center;" onclick={on_backdrop_click}>
+            <div class="system-dialog open-with-dialog" style="background: #1a1a2e; border-radius: 12px; padding: 20px; min-width: 320px; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <i class="fa-solid fa-folder-open" style="font-size: 24px; color: #4a9eff;"></i>
+                    <div>
+                        <div style="font-size: 16px; font-weight: 600; color: #fff;">{"Open with"}</div>
+                        <div style="font-size: 12px; color: #888; margin-top: 2px;">{file_name}</div>
+                    </div>
+                </div>
+
+                {content}
+
+                <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+                    <button
+                        style="padding: 8px 16px; background: rgba(255,255,255,0.1); border: none; border-radius: 6px; color: #fff; cursor: pointer;"
+                        onclick={on_dismiss}
+                    >
+                        {"Cancel"}
+                    </button>
+                </div>
+            </div>
+        </div>
     }
 }

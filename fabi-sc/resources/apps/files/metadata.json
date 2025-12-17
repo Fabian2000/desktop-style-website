@@ -1,0 +1,17 @@
+{
+  "id": "files",
+  "name": "Files",
+  "version": "1.0.0",
+  "description": "File Explorer for FabiScOS",
+  "author": "FabiScOS",
+  "icon": "icon.png",
+  "entry": "main.py",
+  "window": {
+    "width": 700,
+    "height": 500,
+    "resizable": true,
+    "min_width": 400,
+    "min_height": 300
+  },
+  "file_handlers": []
+}

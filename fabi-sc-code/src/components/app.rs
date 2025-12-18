@@ -11,7 +11,8 @@ use super::app_window::AppWindow;
 use super::lock_screen::LockScreen;
 use super::offline_screen::OfflineScreen;
 use super::recents_view::{RecentsAppInfo, RecentsView};
-use super::taskbar::Taskbar;
+use super::shutdown_screen::ShutdownScreen;
+use super::taskbar::{PowerAction, Taskbar};
 use super::top_bar::TopBar;
 use super::workspace::Workspace;
 use crate::filesystem;
@@ -46,6 +47,8 @@ enum AppState {
     LockScreen,
     Desktop,
     Offline,
+    ShuttingDown,
+    Restarting,
 }
 
 /// Open window state
@@ -180,6 +183,25 @@ pub fn app() -> Html {
         let app_state = app_state.clone();
         Callback::from(move |_| {
             app_state.set(AppState::Offline);
+        })
+    };
+
+    // Power action callback (shutdown/restart)
+    let on_power_action = {
+        let app_state = app_state.clone();
+        let open_windows = open_windows.clone();
+        Callback::from(move |action: PowerAction| {
+            // Clear all windows (kill all Python processes effectively)
+            open_windows.set(HashMap::new());
+
+            match action {
+                PowerAction::Shutdown => {
+                    app_state.set(AppState::ShuttingDown);
+                }
+                PowerAction::Restart => {
+                    app_state.set(AppState::Restarting);
+                }
+            }
         })
     };
 
@@ -551,6 +573,8 @@ pub fn app() -> Html {
     let show_lock_screen = *app_state == AppState::LockScreen;
     let show_desktop = *app_state == AppState::Desktop || *app_state == AppState::LockScreen;
     let is_offline = *app_state == AppState::Offline;
+    let is_shutting_down = *app_state == AppState::ShuttingDown;
+    let is_restarting = *app_state == AppState::Restarting;
 
     // Collect windows for rendering
     let windows_list: Vec<OpenWindow> = open_windows.values().cloned().collect();
@@ -559,7 +583,7 @@ pub fn app() -> Html {
     // This way when boot completes, everything is already rendered and ready
     html! {
         <>
-            <TopBar visible={show_desktop && !is_offline && !is_booting} on_disconnect={on_disconnect} />
+            <TopBar visible={show_desktop && !is_offline && !is_booting} on_disconnect={on_disconnect.clone()} />
             <Workspace visible={show_desktop && !is_offline && !is_booting} />
             // Windows rendered OUTSIDE workspace so they have their own stacking context
             // This allows mobile windows to appear above the mobile-dock
@@ -618,10 +642,11 @@ pub fn app() -> Html {
                 }
             })}
             <Taskbar
-                visible={show_desktop && !is_offline && !is_booting}
+                visible={show_desktop && !is_offline && !is_booting && !is_shutting_down && !is_restarting}
                 active_app={active_app_id}
                 open_apps={windows_list.iter().map(|w| w.app_id.clone()).collect::<Vec<_>>()}
                 on_app_click={on_app_click}
+                on_power_action={on_power_action}
             />
             // Recents/App Switcher View
             <RecentsView
@@ -636,6 +661,11 @@ pub fn app() -> Html {
                 on_dismiss={on_recents_dismiss}
             />
             <OfflineScreen visible={is_offline} />
+            <ShutdownScreen
+                visible={is_shutting_down || is_restarting}
+                is_restart={is_restarting}
+                on_shutdown_complete={on_disconnect.clone()}
+            />
             <LockScreen visible={show_lock_screen || is_booting} boot_complete={!is_booting} on_login={on_login} />
 
             // "Open with" system dialog (very high z-index)

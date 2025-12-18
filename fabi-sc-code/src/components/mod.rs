@@ -6,6 +6,7 @@ mod lock_screen;
 mod notification_panel;
 mod offline_screen;
 mod recents_view;
+mod shutdown_screen;
 mod taskbar;
 mod top_bar;
 mod workspace;

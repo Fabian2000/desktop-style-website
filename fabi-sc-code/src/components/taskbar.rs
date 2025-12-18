@@ -55,6 +55,12 @@ impl AppDisplayInfo {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum PowerAction {
+    Shutdown,
+    Restart,
+}
+
 #[derive(Properties, PartialEq)]
 pub struct TaskbarProps {
     pub visible: bool,
@@ -64,6 +70,8 @@ pub struct TaskbarProps {
     pub open_apps: Vec<String>,  // All open app IDs (for running indicator)
     #[prop_or_default]
     pub on_app_click: Callback<(String, Vec<String>)>,  // Emits (app_id, args)
+    #[prop_or_default]
+    pub on_power_action: Callback<PowerAction>,  // Emits shutdown/restart actions
 }
 
 /// Mobile dock apps (first 3 pinned apps)
@@ -228,19 +236,56 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     // Context menu state
     let context_menu = use_state(ContextMenuState::default);
 
+    // Power menu state (for shutdown/restart/sleep options)
+    let power_menu_open = use_state(|| false);
+
     // Toggle start menu (desktop)
     let toggle_start_menu = {
         let drawer_open = drawer_open.clone();
         let context_menu = context_menu.clone();
         let search_query = search_query.clone();
+        let power_menu_open = power_menu_open.clone();
         Callback::from(move |_| {
             context_menu.set(ContextMenuState::default());
+            power_menu_open.set(false);
             let is_open = !*drawer_open;
             drawer_open.set(is_open);
             // Clear search when closing
             if !is_open {
                 search_query.set(String::new());
             }
+        })
+    };
+
+    // Toggle power menu
+    let toggle_power_menu = {
+        let power_menu_open = power_menu_open.clone();
+        Callback::from(move |e: MouseEvent| {
+            e.stop_propagation();
+            power_menu_open.set(!*power_menu_open);
+        })
+    };
+
+    // Power action handlers
+    let on_shutdown = {
+        let on_power_action = props.on_power_action.clone();
+        let drawer_open = drawer_open.clone();
+        let power_menu_open = power_menu_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            drawer_open.set(false);
+            power_menu_open.set(false);
+            on_power_action.emit(PowerAction::Shutdown);
+        })
+    };
+
+    let on_restart = {
+        let on_power_action = props.on_power_action.clone();
+        let drawer_open = drawer_open.clone();
+        let power_menu_open = power_menu_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            drawer_open.set(false);
+            power_menu_open.set(false);
+            on_power_action.emit(PowerAction::Restart);
         })
     };
 
@@ -610,7 +655,18 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
             </div>
 
             // Desktop: Custom App Launcher (Start Menu)
-            <div class={if *drawer_open { "start-menu open" } else { "start-menu" }}>
+            <div
+                class={if *drawer_open { "start-menu open" } else { "start-menu" }}
+                onclick={{
+                    let power_menu_open = power_menu_open.clone();
+                    Callback::from(move |_| {
+                        // Close power menu when clicking anywhere in start menu
+                        if *power_menu_open {
+                            power_menu_open.set(false);
+                        }
+                    })
+                }}
+            >
                 // Header with user info
                 <div class="start-menu-header">
                     <img class="user-avatar" src="resources/img/logo_inverted_bg.webp" alt="User" />
@@ -684,17 +740,49 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
                 // Quick actions footer
                 <div class="start-menu-footer">
-                    <button class="quick-action">
+                    <button class="quick-action" onclick={{
+                        let on_app_click = props.on_app_click.clone();
+                        let close_drawer = close_drawer.clone();
+                        Callback::from(move |_| {
+                            on_app_click.emit(("files".to_string(), vec![]));
+                            close_drawer.emit(());
+                        })
+                    }}>
                         <i class="fa-solid fa-folder"></i>
                         <span>{"Files"}</span>
                     </button>
-                    <button class="quick-action">
+                    <button class="quick-action" onclick={{
+                        let on_app_click = props.on_app_click.clone();
+                        let close_drawer = close_drawer.clone();
+                        Callback::from(move |_| {
+                            on_app_click.emit(("terminal".to_string(), vec![]));
+                            close_drawer.emit(());
+                        })
+                    }}>
                         <i class="fa-solid fa-terminal"></i>
                         <span>{"Terminal"}</span>
                     </button>
-                    <button class="quick-action power">
-                        <i class="fa-solid fa-power-off"></i>
-                    </button>
+                    <div class="power-menu-container">
+                        <button class="quick-action power" onclick={toggle_power_menu.clone()}>
+                            <i class="fa-solid fa-power-off"></i>
+                        </button>
+                        if *power_menu_open {
+                            <div class="power-menu">
+                                <button class="power-menu-item" onclick={on_restart.clone()}>
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                    <span>{"Restart"}</span>
+                                </button>
+                                <button class="power-menu-item" onclick={on_shutdown.clone()}>
+                                    <i class="fa-solid fa-power-off"></i>
+                                    <span>{"Shut down"}</span>
+                                </button>
+                                <button class="power-menu-item disabled" disabled={true}>
+                                    <i class="fa-solid fa-moon"></i>
+                                    <span>{"Sleep"}</span>
+                                </button>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
 

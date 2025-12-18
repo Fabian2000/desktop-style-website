@@ -382,6 +382,63 @@
   pointer-events: none;
 }
 
+.shutdown-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.shutdown-screen .shutdown-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+.shutdown-screen .shutdown-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+.shutdown-screen .shutdown-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #fff;
+  border-radius: 50%;
+  animation: shutdown-spin 1s linear infinite;
+}
+.shutdown-screen .shutdown-text {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 300;
+  margin: 0;
+}
+.shutdown-screen.fade-out .shutdown-overlay {
+  opacity: 1;
+}
+.shutdown-screen.black .shutdown-overlay {
+  opacity: 1;
+}
+.shutdown-screen.black .shutdown-content {
+  opacity: 0;
+}
+@keyframes shutdown-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .top-bar {
   position: fixed;
   top: 0;
@@ -1188,6 +1245,59 @@
 }
 .start-menu .start-menu-footer .quick-action i {
   font-size: 14px;
+}
+.start-menu .start-menu-footer .power-menu-container {
+  position: relative;
+}
+.start-menu .start-menu-footer .power-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: rgba(30, 30, 46, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  padding: 6px;
+  min-width: 160px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: power-menu-appear 0.15s ease;
+}
+.start-menu .start-menu-footer .power-menu .power-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 28px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+.start-menu .start-menu-footer .power-menu .power-menu-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+.start-menu .start-menu-footer .power-menu .power-menu-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.start-menu .start-menu-footer .power-menu .power-menu-item i {
+  width: 16px;
+  text-align: center;
+  font-size: 13px;
+}
+@keyframes power-menu-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .mobile-dock {

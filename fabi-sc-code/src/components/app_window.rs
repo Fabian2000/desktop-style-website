@@ -8,6 +8,21 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{MouseEvent, KeyboardEvent, InputEvent, HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// Global scroll positions storage - survives component re-creation
+/// Key: "window_id:element_name" -> scroll_top value
+fn scroll_positions() -> &'static Mutex<HashMap<String, i32>> {
+    static SCROLL_POSITIONS: OnceLock<Mutex<HashMap<String, i32>>> = OnceLock::new();
+    SCROLL_POSITIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Global flag to prevent scroll listeners from saving 0 during restore
+fn restoring_flag() -> &'static Mutex<bool> {
+    static RESTORING: OnceLock<Mutex<bool>> = OnceLock::new();
+    RESTORING.get_or_init(|| Mutex::new(false))
+}
 
 use crate::python::runtime::{PythonRuntime, AppExecResult};
 
@@ -110,10 +125,6 @@ pub fn app_window(props: &AppWindowProps) -> Html {
 
     // Store the change handler and value for textareas with on_change
     let pending_change = use_mut_ref(|| None::<(String, String)>);
-
-    // Store scroll positions for elements with data-name attribute
-    // Maps element name -> scrollTop value
-    let scroll_positions = use_mut_ref(|| std::collections::HashMap::<String, i32>::new());
 
     // Trigger for re-running the app (incremented on input submit or back press)
     // Using use_state for the actual trigger, plus a Cell to track the count
@@ -362,7 +373,6 @@ if '__change_handler__' in dir() and __change_handler__:
                 if let Some(name) = scroll_to_bottom.clone() {
                     let window_id_clone = window_id.clone();
                     let name_clone = name.clone();
-                    let scroll_positions_clone = scroll_positions.clone();
                     wasm_bindgen_futures::spawn_local(async move {
                         // Small delay to ensure DOM update
                         gloo_timers::future::TimeoutFuture::new(10).await;
@@ -377,82 +387,133 @@ if '__change_handler__' in dir() and __change_handler__:
                                     // Scroll to bottom by setting scrollTop to scrollHeight
                                     let scroll_height = element.scroll_height();
                                     element.set_scroll_top(scroll_height);
-                                    // Save the new scroll position
-                                    scroll_positions_clone.borrow_mut().insert(name_clone, scroll_height);
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Restore scroll positions and attach scroll listeners after re-render
-                {
-                    let scroll_positions = scroll_positions.clone();
-                    let window_id_clone = window_id.clone();
-                    let scroll_to_bottom_name = scroll_to_bottom;
-                    wasm_bindgen_futures::spawn_local(async move {
-                        // Small delay to ensure DOM update
-                        gloo_timers::future::TimeoutFuture::new(15).await;
-                        if let Some(window) = web_sys::window() {
-                            if let Some(document) = window.document() {
-                                // Find all elements with data-name inside this window
-                                let scoped_selector = format!(
-                                    "[data-window-id=\"{}\"] .app-ui [data-name]",
-                                    window_id_clone
-                                );
-                                if let Ok(elements) = document.query_selector_all(&scoped_selector) {
-                                    let positions = scroll_positions.borrow();
-                                    for i in 0..elements.length() {
-                                        if let Some(element) = elements.get(i) {
-                                            if let Ok(el) = element.dyn_into::<web_sys::Element>() {
-                                                if let Some(name) = el.get_attribute("data-name") {
-                                                    // Restore scroll position if we have one saved
-                                                    // Skip if this element had scroll_to_bottom requested
-                                                    let should_restore = if let Some(ref stb_name) = scroll_to_bottom_name {
-                                                        &name != stb_name
-                                                    } else {
-                                                        true
-                                                    };
-                                                    if should_restore {
-                                                        if let Some(&saved_pos) = positions.get(&name) {
-                                                            el.set_scroll_top(saved_pos);
-                                                        }
-                                                    }
-
-                                                    // Attach scroll listener to this element
-                                                    let scroll_positions_inner = scroll_positions.clone();
-                                                    let name_inner = name.clone();
-                                                    let onscroll = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                                                        // We need to query the element again to get current scroll position
-                                                        if let Some(win) = web_sys::window() {
-                                                            if let Some(doc) = win.document() {
-                                                                let sel = format!("[data-name=\"{}\"]", name_inner);
-                                                                if let Ok(Some(target_el)) = doc.query_selector(&sel) {
-                                                                    let scroll_top = target_el.scroll_top();
-                                                                    scroll_positions_inner.borrow_mut().insert(name_inner.clone(), scroll_top);
-                                                                }
-                                                            }
-                                                        }
-                                                    }) as Box<dyn FnMut(web_sys::Event)>);
-
-                                                    let _ = el.add_event_listener_with_callback(
-                                                        "scroll",
-                                                        onscroll.as_ref().unchecked_ref(),
-                                                    );
-                                                    // Leak the closure to keep it alive
-                                                    onscroll.forget();
-                                                }
-                                            }
-                                        }
+                                    // Save the new scroll position to global storage
+                                    let key = format!("{}:{}", window_id_clone, name_clone);
+                                    if let Ok(mut guard) = scroll_positions().lock() {
+                                        guard.insert(key, scroll_height);
                                     }
                                 }
                             }
                         }
                     });
                 }
+
             } else {
                 web_sys::console::log_1(&format!("[Python] No code provided for {}", app_id).into());
             }
+        }
+
+        // Restore scroll positions from the GLOBAL HashMap after DOM update
+        // Uses static SCROLL_POSITIONS which survives component re-creation
+        {
+            let window_id_clone = window_id.clone();
+
+            // Check if we have positions for this window
+            let positions: Vec<(String, i32)> = if let Ok(guard) = scroll_positions().lock() {
+                guard.iter()
+                    .filter(|(k, _)| k.starts_with(&format!("{}:", window_id_clone)))
+                    .map(|(k, v)| {
+                        // Extract element name from "window_id:element_name"
+                        let name = k.split(':').nth(1).unwrap_or("").to_string();
+                        (name, *v)
+                    })
+                    .filter(|(name, _)| !name.is_empty())
+                    .collect()
+            } else {
+                vec![]
+            };
+
+            if !positions.is_empty() {
+                // Set flag BEFORE spawning to block any scroll events
+                if let Ok(mut flag) = restoring_flag().lock() {
+                    *flag = true;
+                }
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    // Small delay to ensure DOM is ready
+                    gloo_timers::future::TimeoutFuture::new(15).await;
+
+                    web_sys::console::log_1(&format!("[Scroll] Restoring {} positions for window {}", positions.len(), window_id_clone).into());
+
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            for (name, scroll_top) in &positions {
+                                let scoped_selector = format!(
+                                    "[data-window-id=\"{}\"] .app-ui [data-name=\"{}\"]",
+                                    window_id_clone, name
+                                );
+                                if let Ok(Some(el)) = document.query_selector(&scoped_selector) {
+                                    web_sys::console::log_1(&format!("[Scroll] Restoring {} to {}", name, scroll_top).into());
+                                    el.set_scroll_top(*scroll_top);
+                                }
+                            }
+                        }
+                    }
+
+                    // Wait for scroll events to settle, then allow saving again
+                    gloo_timers::future::TimeoutFuture::new(50).await;
+                    if let Ok(mut flag) = restoring_flag().lock() {
+                        *flag = false;
+                    }
+                });
+            }
+        }
+
+        // Attach scroll listeners to track positions
+        {
+            let window_id_clone = window_id.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                gloo_timers::future::TimeoutFuture::new(20).await;
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let scoped_selector = format!(
+                            "[data-window-id=\"{}\"] .app-ui [data-name]",
+                            window_id_clone
+                        );
+                        if let Ok(elements) = document.query_selector_all(&scoped_selector) {
+                            for i in 0..elements.length() {
+                                if let Some(element) = elements.get(i) {
+                                    if let Ok(el) = element.dyn_into::<web_sys::Element>() {
+                                        if let Some(name) = el.get_attribute("data-name") {
+                                            let window_id_inner = window_id_clone.clone();
+                                            let name_inner = name.clone();
+                                            let onscroll = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                                                // Skip if we're restoring - don't save 0 values
+                                                if let Ok(flag) = restoring_flag().lock() {
+                                                    if *flag {
+                                                        return;
+                                                    }
+                                                }
+                                                if let Some(win) = web_sys::window() {
+                                                    if let Some(doc) = win.document() {
+                                                        let sel = format!(
+                                                            "[data-window-id=\"{}\"] [data-name=\"{}\"]",
+                                                            window_id_inner, name_inner
+                                                        );
+                                                        if let Ok(Some(target_el)) = doc.query_selector(&sel) {
+                                                            let scroll_top = target_el.scroll_top();
+                                                            let key = format!("{}:{}", window_id_inner, name_inner);
+                                                            if let Ok(mut guard) = scroll_positions().lock() {
+                                                                guard.insert(key, scroll_top);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }) as Box<dyn FnMut(web_sys::Event)>);
+
+                                            let _ = el.add_event_listener_with_callback(
+                                                "scroll",
+                                                onscroll.as_ref().unchecked_ref(),
+                                            );
+                                            onscroll.forget();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
     }
 

@@ -15,6 +15,11 @@ pub fn get_local_time_no_sec() -> String {
     get_local_date_time(DateOrTime::TimeNoSec)
 }
 
+#[allow(dead_code)]
+pub fn get_local_date() -> String {
+    get_local_date_time(DateOrTime::Date)
+}
+
 fn get_local_date_time(date_or_time: DateOrTime) -> String {
     let date = Date::new_0();
     let options = Object::new();

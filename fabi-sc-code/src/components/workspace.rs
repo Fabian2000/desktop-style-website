@@ -1,5 +1,7 @@
 use yew::prelude::*;
 
+use super::desktop_widgets::DesktopWidgets;
+
 #[derive(Properties, PartialEq)]
 pub struct WorkspaceProps {
     pub visible: bool,
@@ -15,6 +17,7 @@ pub fn workspace(props: &WorkspaceProps) -> Html {
 
     html! {
         <div class="workspace">
+            <DesktopWidgets />
             <div class="workspace-content">
                 {props.children.clone()}
             </div>

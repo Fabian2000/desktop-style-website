@@ -2,6 +2,7 @@ mod app;
 mod app_window;
 mod boot_screen;
 mod calendar_popup;
+mod desktop_widgets;
 mod lock_screen;
 mod notification_panel;
 mod offline_screen;

@@ -133,6 +133,7 @@ impl TaskbarDb {
     }
 
     /// Register an app path
+    #[allow(dead_code)]
     pub async fn register_app(&self, path: &str) -> Result<(), String> {
         let mut apps = self.get_all_apps().await;
 
@@ -194,12 +195,14 @@ impl TaskbarDb {
     }
 
     /// Check if an app path is pinned
+    #[allow(dead_code)]
     pub async fn is_pinned(&self, app_path: &str) -> bool {
         let apps = self.get_pinned().await;
         apps.iter().any(|a| a.path == app_path)
     }
 
     /// Reorder pinned apps (move app to new position)
+    #[allow(dead_code)]
     pub async fn reorder(&self, app_path: &str, new_order: u32) -> Result<(), String> {
         let mut apps = self.get_pinned().await;
 

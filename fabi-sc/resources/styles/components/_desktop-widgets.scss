@@ -2,14 +2,29 @@
     position: absolute;
     inset: 0;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     pointer-events: none;
     z-index: 5;
 
+    &.editing-mode {
+        pointer-events: auto;
+    }
+
     .clock-widget {
         text-align: center;
         color: #fff;
+        pointer-events: auto;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+
+        &.editing {
+            outline: 2px solid rgba(255, 255, 255, 0.4);
+            outline-offset: 20px;
+            border-radius: 12px;
+        }
 
         .clock-time {
             font-size: 120px;
@@ -30,8 +45,223 @@
                 0 0 30px rgba(0, 0, 0, 0.8),
                 0 2px 10px rgba(0, 0, 0, 0.9);
         }
+
+        // Style: Minimal (default - no extra styles needed)
+        &.style-minimal {
+            // Base styles above
+        }
+
+        // Style: Glass
+        &.style-glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 40px 60px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+
+            .clock-time {
+                font-size: 100px;
+                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            }
+
+            .clock-date {
+                text-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        // Style: Bold
+        &.style-bold {
+            .clock-time {
+                font-size: 180px;
+                font-weight: 700;
+                letter-spacing: -4px;
+            }
+
+            .clock-date {
+                display: none;
+            }
+        }
+
+        // Style: Corner
+        &.style-corner {
+            position: fixed !important;
+            top: auto !important;
+            bottom: 80px;
+            left: 20px;
+            right: auto !important;
+
+            .clock-time {
+                font-size: 36px;
+                font-weight: 400;
+                letter-spacing: 0;
+            }
+
+            .clock-date {
+                font-size: 14px;
+                margin-top: 4px;
+            }
+
+            &.editing {
+                outline-offset: 10px;
+            }
+        }
+
+        // Style: Hidden
+        &.style-hidden {
+            display: none;
+        }
+
+        // Style: Analog
+        &.style-analog {
+            &.editing {
+                outline-offset: 30px;
+            }
+        }
     }
 
+    // Hidden clock indicator - invisible until hover
+    .hidden-clock-area {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 24px;
+        cursor: pointer;
+        pointer-events: auto;
+        opacity: 0;
+        transition: all 0.3s;
+
+        &:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+    }
+
+    // Analog Clock
+    .analog-clock {
+        width: 200px;
+        height: 200px;
+
+        .clock-face {
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            box-shadow:
+                0 0 40px rgba(0, 0, 0, 0.3),
+                inset 0 0 30px rgba(255, 255, 255, 0.05);
+        }
+
+        .hour-marker {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            top: 10px;
+            left: 50%;
+            margin-left: -1px;
+            transform-origin: center 90px;
+        }
+
+        .hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            border-radius: 2px;
+        }
+
+        .hour-hand {
+            width: 4px;
+            height: 50px;
+            margin-left: -2px;
+            background: #fff;
+        }
+
+        .minute-hand {
+            width: 3px;
+            height: 70px;
+            margin-left: -1.5px;
+            background: #fff;
+        }
+
+        .second-hand {
+            width: 1px;
+            height: 80px;
+            margin-left: -0.5px;
+            background: #ff6b6b;
+        }
+
+        .center-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #fff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    }
+
+    // Style Picker
+    .style-picker {
+        display: flex;
+        gap: 12px;
+        margin-top: 40px;
+        pointer-events: auto;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 500px;
+
+        .style-btn {
+            width: 80px;
+            height: 70px;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 20px;
+            transition: all 0.2s;
+
+            &:hover {
+                border-color: rgba(255, 255, 255, 0.5);
+                transform: translateY(-2px);
+                color: #fff;
+            }
+
+            &.active {
+                border-color: #fff;
+                background: rgba(255, 255, 255, 0.2);
+                color: #fff;
+            }
+
+            .style-label {
+                font-size: 10px;
+                text-transform: capitalize;
+            }
+        }
+    }
+
+    // Mobile adjustments
     @media screen and (orientation: portrait) {
         .clock-widget {
             .clock-time {
@@ -40,6 +270,65 @@
 
             .clock-date {
                 font-size: 22px;
+            }
+
+            &.style-glass {
+                padding: 30px 40px;
+
+                .clock-time {
+                    font-size: 70px;
+                }
+            }
+
+            &.style-bold {
+                .clock-time {
+                    font-size: 100px;
+                }
+            }
+
+            &.style-corner {
+                bottom: 120px;
+
+                .clock-time {
+                    font-size: 32px;
+                }
+            }
+        }
+
+        .analog-clock {
+            width: 160px;
+            height: 160px;
+
+            .hour-marker {
+                transform-origin: center 70px;
+                top: 8px;
+            }
+
+            .hour-hand {
+                height: 40px;
+            }
+
+            .minute-hand {
+                height: 55px;
+            }
+
+            .second-hand {
+                height: 60px;
+            }
+        }
+
+        .style-picker {
+            margin-top: 30px;
+            gap: 8px;
+
+            .style-btn {
+                width: 70px;
+                height: 60px;
+                font-size: 18px;
+
+                .style-label {
+                    font-size: 9px;
+                }
             }
         }
     }

@@ -5,7 +5,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{MouseEvent, TouchEvent};
 use yew::prelude::*;
 
-use crate::database::{fetch_app_metadata, AppMetadata, PinnedApp, TaskbarDb};
+use crate::database::{fetch_app_metadata, AppMetadata, TaskbarDb};
 use crate::filesystem;
 
 /// App info for display - loaded from metadata.json
@@ -49,6 +49,7 @@ impl AppDisplayInfo {
     }
 
     /// Check if icon is an image (data URL or path with extension)
+    #[allow(dead_code)]
     pub fn is_image_icon(&self) -> bool {
         // Data URLs or paths with file extensions
         self.icon.starts_with("data:") || self.icon.contains('.')

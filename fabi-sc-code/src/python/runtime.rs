@@ -7,7 +7,7 @@
 //! - No network access except through app API
 //! - Isolated per-app execution context
 
-use rustpython_vm::{pymodule, Interpreter, Settings, VirtualMachine};
+use rustpython_vm::{pymodule, Interpreter, Settings};
 use std::cell::RefCell;
 use std::rc::Rc;
 

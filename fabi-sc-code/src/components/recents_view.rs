@@ -2,7 +2,6 @@
 //!
 //! Shows all open apps as cards that can be swiped away to close.
 
-use wasm_bindgen::JsCast;
 use web_sys::{MouseEvent, TouchEvent};
 use yew::prelude::*;
 

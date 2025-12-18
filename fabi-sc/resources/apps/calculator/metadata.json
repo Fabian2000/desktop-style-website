@@ -1,0 +1,17 @@
+{
+  "id": "calculator",
+  "name": "Calculator",
+  "version": "1.0.0",
+  "description": "Simple calculator",
+  "author": "FabiScOS",
+  "icon": "icon.png",
+  "entry": "main.py",
+  "pinned": false,
+  "window": {
+    "width": 280,
+    "height": 400,
+    "resizable": false,
+    "min_width": 280,
+    "min_height": 400
+  }
+}

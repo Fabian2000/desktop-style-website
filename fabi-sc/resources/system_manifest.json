@@ -130,6 +130,36 @@
         "system": true,
         "hidden": false
       }
+    },
+    {
+      "path": "/home/.system/apps/calculator/metadata.json",
+      "server_path": "/resources/apps/calculator/metadata.json",
+      "hash": "calc_meta_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/calculator/main.py",
+      "server_path": "/resources/apps/calculator/main.py",
+      "hash": "calc_main_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
+    },
+    {
+      "path": "/home/.system/apps/calculator/icon.png",
+      "server_path": "/resources/apps/calculator/icon.png",
+      "hash": "calc_icon_v1",
+      "permissions": {
+        "readonly": true,
+        "system": true,
+        "hidden": false
+      }
     }
   ]
 }

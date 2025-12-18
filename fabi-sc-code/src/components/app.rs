@@ -224,14 +224,10 @@ pub fn app() -> Html {
                 let z = *next_z_index;
                 next_z_index.set(z + 1);
 
-                // Determine app path based on app type
+                // Try system apps first, then user apps
                 // System apps: /home/.system/apps/{app_id}/
                 // User apps: /home/apps/{app_id}/
-                let app_path = if matches!(app_id.as_str(), "terminal" | "files" | "settings" | "help" | "editor") {
-                    format!("/home/.system/apps/{}/", app_id)
-                } else {
-                    format!("/home/apps/{}/", app_id)
-                };
+                let app_path = format!("/home/.system/apps/{}/", app_id);
 
                 // Load Python code asynchronously, then create window
                 let open_windows_async = open_windows.clone();

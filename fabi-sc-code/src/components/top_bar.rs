@@ -674,9 +674,6 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                 <div></div>
                 <div>
                     <button class="top-bar-btn">
-                        <i class="fa-solid fa-user"></i>
-                    </button>
-                    <button class="top-bar-btn">
                         <i class="fa-solid fa-bell"></i>
                     </button>
                     <button class="top-bar-btn" id="top-bar-wifi-audio-btn" onclick={toggle_popup.clone()}>

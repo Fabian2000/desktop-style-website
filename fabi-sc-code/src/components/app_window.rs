@@ -665,6 +665,11 @@ if '__change_handler__' in dir() and __change_handler__:
         });
     }
 
+    // Prevent drag when clicking window control buttons
+    let stop_drag_propagation = Callback::from(move |e: MouseEvent| {
+        e.stop_propagation();
+    });
+
     // Minimize button handler - just emit callback, let parent handle state
     // The use_effect_with(minimized_prop) will update window_state when parent changes props.minimized
     let on_minimize_click = {
@@ -861,6 +866,7 @@ if '__change_handler__' in dir() and __change_handler__:
                         <button
                             class="window-btn minimize"
                             onclick={on_minimize_click}
+                            onmousedown={stop_drag_propagation.clone()}
                             title="Minimieren"
                         >
                             <i class="fa-solid fa-minus"></i>
@@ -868,6 +874,7 @@ if '__change_handler__' in dir() and __change_handler__:
                         <button
                             class="window-btn maximize"
                             onclick={on_maximize_click}
+                            onmousedown={stop_drag_propagation.clone()}
                             title={if is_maximized { "Wiederherstellen" } else { "Maximieren" }}
                         >
                             if is_maximized {
@@ -879,6 +886,7 @@ if '__change_handler__' in dir() and __change_handler__:
                         <button
                             class="window-btn close"
                             onclick={on_close_click.clone()}
+                            onmousedown={stop_drag_propagation.clone()}
                             title="Schließen"
                         >
                             <i class="fa-solid fa-xmark"></i>

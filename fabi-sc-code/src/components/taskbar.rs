@@ -205,6 +205,26 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let drawer_offset = use_state(|| 0.0f64);
     let touch_start_y = use_state(|| 0.0f64);
 
+    // Search state
+    let search_query = use_state(String::new);
+
+    // Filter apps based on search query
+    let filtered_apps: Vec<AppDisplayInfo> = {
+        let query = search_query.to_lowercase();
+        if query.is_empty() {
+            (*all_apps).clone()
+        } else {
+            all_apps
+                .iter()
+                .filter(|app| {
+                    app.label.to_lowercase().contains(&query)
+                        || app.id.to_lowercase().contains(&query)
+                })
+                .cloned()
+                .collect()
+        }
+    };
+
     // Context menu state
     let context_menu = use_state(ContextMenuState::default);
 
@@ -212,9 +232,25 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let toggle_start_menu = {
         let drawer_open = drawer_open.clone();
         let context_menu = context_menu.clone();
+        let search_query = search_query.clone();
         Callback::from(move |_| {
             context_menu.set(ContextMenuState::default());
-            drawer_open.set(!*drawer_open);
+            let is_open = !*drawer_open;
+            drawer_open.set(is_open);
+            // Clear search when closing
+            if !is_open {
+                search_query.set(String::new());
+            }
+        })
+    };
+
+    // Search input handler
+    let on_search_input = {
+        let search_query = search_query.clone();
+        Callback::from(move |e: InputEvent| {
+            if let Some(input) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
+                search_query.set(input.value());
+            }
         })
     };
 
@@ -367,7 +403,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let on_drawer_touch_start = {
         let touch_start_y = touch_start_y.clone();
         Callback::from(move |e: TouchEvent| {
-            e.prevent_default();
+            // Don't prevent default - allow clicks to pass through
             if let Some(touch) = e.touches().get(0) {
                 touch_start_y.set(touch.client_y() as f64);
             }
@@ -379,11 +415,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         let drawer_offset = drawer_offset.clone();
         let drawer_dragging = drawer_dragging.clone();
         Callback::from(move |e: TouchEvent| {
-            e.prevent_default();
             if let Some(touch) = e.touches().get(0) {
                 let current_y = touch.client_y() as f64;
                 let delta = current_y - *touch_start_y;
                 if delta > 20.0 {
+                    // Only prevent default when actually dragging
+                    e.prevent_default();
                     drawer_dragging.set(true);
                     drawer_offset.set(delta.min(500.0));
                 }
@@ -396,7 +433,10 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         let drawer_dragging = drawer_dragging.clone();
         let drawer_offset = drawer_offset.clone();
         Callback::from(move |e: TouchEvent| {
-            e.prevent_default();
+            // Only prevent default if we were dragging
+            if *drawer_dragging {
+                e.prevent_default();
+            }
             if *drawer_offset > 100.0 {
                 drawer_open.set(false);
             }
@@ -409,22 +449,27 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let close_drawer = {
         let drawer_open = drawer_open.clone();
         let context_menu = context_menu.clone();
+        let search_query = search_query.clone();
         Callback::from(move |_: ()| {
             drawer_open.set(false);
             context_menu.set(ContextMenuState::default());
+            search_query.set(String::new());
         })
     };
 
-    // Global click listener to close menus when clicking outside
+    // Global click listener to close DESKTOP start-menu and context menu
+    // Note: Mobile drawer is ONLY closed via swipe-down or app click, never by clicking
     {
         let drawer_open = drawer_open.clone();
         let context_menu = context_menu.clone();
+        let search_query = search_query.clone();
         use_effect_with((*drawer_open, context_menu.visible), move |(is_open, ctx_visible)| {
             let document = web_sys::window().and_then(|w| w.document());
 
             let closure = if *is_open || *ctx_visible {
                 let drawer_open = drawer_open.clone();
                 let context_menu = context_menu.clone();
+                let search_query = search_query.clone();
                 Some(Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
                     if let Some(target) = e.target() {
                         if let Some(element) = target.dyn_ref::<web_sys::Element>() {
@@ -438,7 +483,20 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                                 // Close context menu on outside click
                                 context_menu.set(ContextMenuState::default());
 
-                                // Check if click is inside start-menu or start-btn
+                                // Mobile drawer: NEVER close on click, only swipe-down
+                                if let Ok(Some(app_drawer)) = doc.query_selector(".app-drawer") {
+                                    if app_drawer.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+                                // Also ignore clicks on mobile dock
+                                if let Ok(Some(mobile_dock)) = doc.query_selector(".mobile-dock") {
+                                    if mobile_dock.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+
+                                // Desktop start-menu: close on outside click
                                 if let Ok(Some(start_menu)) = doc.query_selector(".start-menu") {
                                     if start_menu.contains(Some(element)) {
                                         return;
@@ -450,8 +508,9 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                                     }
                                 }
                             }
-                            // Click was outside - close menu
+                            // Click was outside desktop start-menu - close it
                             drawer_open.set(false);
+                            search_query.set(String::new());
                         }
                     }
                 }) as Box<dyn FnMut(_)>))
@@ -569,14 +628,19 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 // Search bar
                 <div class="start-menu-search">
                     <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" placeholder="Search apps..." />
+                    <input
+                        type="text"
+                        placeholder="Search apps..."
+                        value={(*search_query).clone()}
+                        oninput={on_search_input.clone()}
+                    />
                 </div>
 
                 // Apps section
                 <div class="start-menu-apps">
                     <div class="apps-label">{"Applications"}</div>
                     <div class="start-menu-grid">
-                        { for all_apps.iter().map(|app| {
+                        { for filtered_apps.iter().map(|app| {
                             let app_id = app.id.clone();
                             let app_path = app.path.clone();
                             let close_drawer = close_drawer.clone();
@@ -687,11 +751,16 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 // Search bar
                 <div class="app-drawer-search">
                     <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" placeholder="Search apps..." />
+                    <input
+                        type="text"
+                        placeholder="Search apps..."
+                        value={(*search_query).clone()}
+                        oninput={on_search_input.clone()}
+                    />
                 </div>
 
                 <div class="app-drawer-grid">
-                    { for all_apps.iter().map(|app| {
+                    { for filtered_apps.iter().map(|app| {
                         let app_id = app.id.clone();
                         let close_drawer = close_drawer.clone();
                         let on_click = {

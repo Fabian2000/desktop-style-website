@@ -16,6 +16,7 @@ use super::taskbar::{PowerAction, Taskbar};
 use super::top_bar::TopBar;
 use super::workspace::Workspace;
 use crate::filesystem;
+use crate::session;
 
 fn is_boot_complete() -> bool {
     js_sys::Reflect::get(&web_sys::window().unwrap(), &JsValue::from_str("__bootComplete"))
@@ -86,10 +87,14 @@ pub fn app() -> Html {
     let active_window = use_state(|| Option::<String>::None);
     let show_recents = use_state(|| false);
 
-    // Initialize filesystem and poll for boot complete signal
+    // Initialize filesystem, session management, and poll for boot complete signal
     {
         let app_state = app_state.clone();
+        let open_windows = open_windows.clone();
         use_effect_with((), move |_| {
+            // Initialize session management (broadcasts takeover to other tabs)
+            session::init_session();
+
             spawn_local(async move {
                 // Initialize the virtual filesystem during boot
                 match filesystem::initialize().await {
@@ -113,22 +118,6 @@ pub fn app() -> Html {
                                 &format!("VFS: Cleaned {} old trash files", result.trash_cleaned).into(),
                             );
                         }
-
-                        // Refresh the JavaScript VFS cache after Rust VFS init
-                        // This ensures the JS bridge has all the directories that were just created
-                        if let Some(window) = web_sys::window() {
-                            if let Ok(vfs_sync) = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("__vfsSync")) {
-                                if let Ok(refresh_fn) = js_sys::Reflect::get(&vfs_sync, &wasm_bindgen::JsValue::from_str("refresh")) {
-                                    if let Some(func) = refresh_fn.dyn_ref::<js_sys::Function>() {
-                                        // refresh() returns a Promise, we need to await it
-                                        if let Ok(promise) = func.call0(&vfs_sync) {
-                                            let _ = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await;
-                                            web_sys::console::log_1(&"[VFS] JavaScript cache refreshed".into());
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                     Err(e) => {
                         web_sys::console::error_1(&format!("VFS initialization failed: {}", e).into());
@@ -136,7 +125,17 @@ pub fn app() -> Html {
                 }
 
                 // Poll every 100ms until boot animation is complete
+                // Also check for session takeover
                 loop {
+                    // Check if another tab has taken over this session
+                    if session::check_and_clear_takeover() {
+                        // Kill all processes (clear windows)
+                        open_windows.set(HashMap::new());
+                        // Show disconnect screen
+                        app_state.set(AppState::Offline);
+                        break;
+                    }
+
                     if is_boot_complete() {
                         app_state.set(AppState::LockScreen);
                         break;
@@ -144,6 +143,35 @@ pub fn app() -> Html {
                     TimeoutFuture::new(100).await;
                 }
             });
+            || ()
+        });
+    }
+
+    // Poll for session takeover after boot (when desktop is running)
+    {
+        let app_state = app_state.clone();
+        let open_windows = open_windows.clone();
+        let current_state = (*app_state).clone();
+        use_effect_with(current_state, move |state| {
+            // Only poll when in Desktop or LockScreen state
+            if *state == AppState::Desktop || *state == AppState::LockScreen {
+                let app_state = app_state.clone();
+                let open_windows = open_windows.clone();
+                spawn_local(async move {
+                    loop {
+                        // Check if another tab has taken over this session
+                        if session::check_and_clear_takeover() {
+                            web_sys::console::log_1(&"[App] Session takeover detected - disconnecting".into());
+                            // Kill all processes (clear windows)
+                            open_windows.set(HashMap::new());
+                            // Show disconnect screen
+                            app_state.set(AppState::Offline);
+                            break;
+                        }
+                        TimeoutFuture::new(500).await;
+                    }
+                });
+            }
             || ()
         });
     }

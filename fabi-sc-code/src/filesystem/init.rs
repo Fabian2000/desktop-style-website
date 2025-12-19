@@ -1,9 +1,12 @@
 //! Filesystem initialization and system file synchronization
 
+use crate::filesystem::cache::with_cache_mut;
 use crate::filesystem::path;
+use crate::filesystem::storage::FsStorage;
 use crate::filesystem::types::{Permissions, VfsError};
 use crate::filesystem::vfs;
 use serde::Deserialize;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -73,7 +76,61 @@ pub async fn initialize() -> Result<InitResult, VfsError> {
     // Clean up old trash files
     result.trash_cleaned = vfs::cleanup_trash().await?;
 
+    // Populate the in-memory cache from IndexedDB
+    populate_cache().await?;
+
     Ok(result)
+}
+
+/// Populate the in-memory VFS cache from IndexedDB
+/// This loads all nodes and file contents into memory for synchronous access
+async fn populate_cache() -> Result<(), VfsError> {
+    web_sys::console::log_1(&"[VFS] Populating in-memory cache...".into());
+
+    // Open storage directly for loading
+    let storage = FsStorage::open().await?;
+    let storage = Rc::new(storage);
+
+    // Get all nodes with prefix /home (everything)
+    let all_nodes = storage.get_nodes_with_prefix("/home").await?;
+    let node_count = all_nodes.len();
+
+    // Load all nodes into cache
+    with_cache_mut(|cache| {
+        cache.set_storage(storage.clone());
+
+        for node in &all_nodes {
+            cache.load_node(node.clone());
+        }
+    });
+
+    // Load file contents
+    let mut content_count = 0;
+    for node in &all_nodes {
+        if node.is_file() {
+            if let Ok(Some(content)) = storage.get_content(&node.path).await {
+                with_cache_mut(|cache| {
+                    cache.load_content(&node.path, content);
+                });
+                content_count += 1;
+            }
+        }
+    }
+
+    // Mark cache as initialized
+    with_cache_mut(|cache| {
+        cache.set_initialized();
+    });
+
+    web_sys::console::log_1(
+        &format!(
+            "[VFS] Cache populated: {} nodes, {} file contents",
+            node_count, content_count
+        )
+        .into(),
+    );
+
+    Ok(())
 }
 
 /// Result of filesystem initialization

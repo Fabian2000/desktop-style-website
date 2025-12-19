@@ -5,6 +5,7 @@ mod components;
 mod database;
 pub mod filesystem;
 pub mod python;
+pub mod session;
 mod utils;
 
 use components::App;

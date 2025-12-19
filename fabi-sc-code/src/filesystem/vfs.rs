@@ -135,8 +135,18 @@ pub async fn read_link(path: &str) -> Result<String, VfsError> {
 /// Write file contents (creates or overwrites)
 pub async fn write_file(file_path: &str, data: &[u8]) -> Result<(), VfsError> {
     let normalized = path::normalize(file_path);
-    if !path::is_valid(&normalized) {
-        return Err(VfsError::InvalidPath(file_path.to_string()));
+
+    // Validate path format and characters
+    if let Some(err) = path::validate_path(&normalized) {
+        return Err(VfsError::InvalidPath(err));
+    }
+
+    // Check if path is writable (not in .system)
+    if !path::can_write(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot write to protected path: {}",
+            normalized
+        )));
     }
 
     // Check file size limit
@@ -152,6 +162,13 @@ pub async fn write_file(file_path: &str, data: &[u8]) -> Result<(), VfsError> {
         if existing.permissions.readonly {
             return Err(VfsError::PermissionDenied(format!(
                 "File is read-only: {}",
+                normalized
+            )));
+        }
+        // Check if trying to overwrite a directory with a file
+        if existing.is_dir() {
+            return Err(VfsError::NotAFile(format!(
+                "Cannot overwrite directory with file: {}",
                 normalized
             )));
         }
@@ -223,8 +240,18 @@ pub(crate) async fn write_file_force(file_path: &str, data: &[u8], permissions: 
 /// Create a directory
 pub async fn create_dir(dir_path: &str) -> Result<(), VfsError> {
     let normalized = path::normalize(dir_path);
-    if !path::is_valid(&normalized) {
-        return Err(VfsError::InvalidPath(dir_path.to_string()));
+
+    // Validate path format and characters
+    if let Some(err) = path::validate_path(&normalized) {
+        return Err(VfsError::InvalidPath(err));
+    }
+
+    // Check if path is writable (not in .system)
+    if !path::can_write(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot create directory in protected path: {}",
+            normalized
+        )));
     }
 
     // Check if already exists
@@ -255,8 +282,18 @@ pub async fn create_dir(dir_path: &str) -> Result<(), VfsError> {
 /// Create a directory and all parent directories
 pub async fn create_dir_all(dir_path: &str) -> Result<(), VfsError> {
     let normalized = path::normalize(dir_path);
-    if !path::is_valid(&normalized) {
-        return Err(VfsError::InvalidPath(dir_path.to_string()));
+
+    // Validate path format and characters
+    if let Some(err) = path::validate_path(&normalized) {
+        return Err(VfsError::InvalidPath(err));
+    }
+
+    // Check if path is writable (not in .system)
+    if !path::can_write(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot create directory in protected path: {}",
+            normalized
+        )));
     }
 
     // Build list of directories to create
@@ -298,8 +335,18 @@ pub(crate) async fn create_dir_with_permissions(dir_path: &str, permissions: Per
 /// Create a symlink
 pub async fn symlink(target: &str, link_path: &str) -> Result<(), VfsError> {
     let normalized = path::normalize(link_path);
-    if !path::is_valid(&normalized) {
-        return Err(VfsError::InvalidPath(link_path.to_string()));
+
+    // Validate path format and characters
+    if let Some(err) = path::validate_path(&normalized) {
+        return Err(VfsError::InvalidPath(err));
+    }
+
+    // Check if path is writable (not in .system)
+    if !path::can_write(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot create symlink in protected path: {}",
+            normalized
+        )));
     }
 
     // Check if link already exists
@@ -329,6 +376,15 @@ pub async fn symlink(target: &str, link_path: &str) -> Result<(), VfsError> {
 /// Remove a file (moves to trash unless force=true)
 pub async fn remove_file(file_path: &str) -> Result<(), VfsError> {
     let normalized = path::normalize(file_path);
+
+    // Check if path is protected
+    if path::is_protected(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot delete protected path: {}",
+            normalized
+        )));
+    }
+
     let node = stat(&normalized).await?;
 
     if !node.is_file() && !node.is_symlink() {
@@ -396,6 +452,15 @@ async fn remove_permanently_force(file_path: &str) -> Result<(), VfsError> {
 /// Remove an empty directory
 pub async fn remove_dir(dir_path: &str) -> Result<(), VfsError> {
     let normalized = path::normalize(dir_path);
+
+    // Check if path is protected (includes /home, .system, .Trash)
+    if path::is_protected(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot delete protected directory: {}",
+            normalized
+        )));
+    }
+
     let node = stat(&normalized).await?;
 
     if !node.is_dir() {
@@ -423,6 +488,15 @@ pub async fn remove_dir(dir_path: &str) -> Result<(), VfsError> {
 /// Remove a directory and all its contents
 pub async fn remove_dir_all(dir_path: &str) -> Result<(), VfsError> {
     let normalized = path::normalize(dir_path);
+
+    // Check if path is protected (includes /home, .system, .Trash)
+    if path::is_protected(&normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot delete protected directory: {}",
+            normalized
+        )));
+    }
+
     let node = stat(&normalized).await?;
 
     if !node.is_dir() {
@@ -472,8 +546,25 @@ pub async fn rename(from: &str, to: &str) -> Result<(), VfsError> {
     let from_normalized = path::normalize(from);
     let to_normalized = path::normalize(to);
 
-    if !path::is_valid(&to_normalized) {
-        return Err(VfsError::InvalidPath(to.to_string()));
+    // Validate target path format and characters
+    if let Some(err) = path::validate_path(&to_normalized) {
+        return Err(VfsError::InvalidPath(err));
+    }
+
+    // Check if source is protected
+    if path::is_protected(&from_normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot move protected path: {}",
+            from_normalized
+        )));
+    }
+
+    // Check if target is in protected area
+    if !path::can_write(&to_normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot move to protected path: {}",
+            to_normalized
+        )));
     }
 
     let node = stat(&from_normalized).await?;
@@ -566,8 +657,17 @@ pub async fn copy(from: &str, to: &str) -> Result<(), VfsError> {
     let from_normalized = path::normalize(from);
     let to_normalized = path::normalize(to);
 
-    if !path::is_valid(&to_normalized) {
-        return Err(VfsError::InvalidPath(to.to_string()));
+    // Validate target path format and characters
+    if let Some(err) = path::validate_path(&to_normalized) {
+        return Err(VfsError::InvalidPath(err));
+    }
+
+    // Check if target is in protected area
+    if !path::can_write(&to_normalized) {
+        return Err(VfsError::PermissionDenied(format!(
+            "Cannot copy to protected path: {}",
+            to_normalized
+        )));
     }
 
     let node = stat(&from_normalized).await?;
@@ -599,8 +699,20 @@ pub async fn copy(from: &str, to: &str) -> Result<(), VfsError> {
     }
 
     // Read content and write to new location
+    // Note: write_file has its own protection checks, but we already checked above
     let content = read_file(&from_normalized).await?;
-    write_file(&to_normalized, &content).await
+
+    // Create node directly without going through write_file to bypass the can_write check
+    // (we already checked it above, and write_file would reject copying to protected paths)
+    let name = path::file_name(&to_normalized).unwrap_or_default();
+    let mime_type = path::mime_type(&to_normalized);
+    let new_node = FileNode::new_file(&to_normalized, &name, content.len() as u64, mime_type);
+
+    let storage = get_storage()?;
+    storage.put_node(&new_node).await?;
+    storage.put_content(&to_normalized, &content).await?;
+
+    Ok(())
 }
 
 // ============ Trash Cleanup ============

@@ -31,13 +31,19 @@
 //! vfs::remove_file("/home/Documents/old.txt").await?;
 //! ```
 
+pub mod cache;
 pub mod init;
 pub mod path;
-mod storage;
+pub(crate) mod storage;
 pub mod types;
 pub mod vfs;
 
 // Re-export commonly used items
+pub use cache::{
+    copy_sync, exists_sync, get_data_url_sync, list_dir_sync, mkdir_p_sync, mkdir_sync,
+    read_bytes_sync, read_text_sync, remove_sync, rename_sync, stat_sync, with_cache,
+    with_cache_mut, write_sync, write_text_sync,
+};
 pub use init::{initialize, InitResult};
 pub use types::{FileNode, FileType, Permissions, VfsError};
 

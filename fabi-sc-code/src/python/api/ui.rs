@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn test_text_escapes_html() {
         let style = Style::new();
-        let html = render_text("<script>alert(1)</script>", &style);
+        let html = render_text("<script>alert(1)</script>", None, &style);
         assert!(!html.contains("<script>"));
         assert!(html.contains("&lt;script&gt;"));
     }

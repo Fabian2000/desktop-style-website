@@ -68,380 +68,70 @@
             };
 
             // ================================================================
-            // VFS Sync Bridge - Provides synchronous VFS access for Python
-            // Uses an in-memory cache that syncs with IndexedDB
-            // MUST use same DB as Rust VFS: "filesystem" with stores: nodes, content
+            // HTTP API - Synchronous HTTP requests for Python apps
+            // Uses XMLHttpRequest in sync mode (deprecated but functional)
             // ================================================================
-            window.__vfsSync = {
-                // In-memory cache: path -> { type: 'file'|'dir', content?: string, children?: Map }
-                _cache: new Map(),
-                _db: null,
-                _initialized: false,
-
-                // Initialize from IndexedDB - same DB as Rust VFS
-                async init() {
-                    if (this._initialized) return;
-
+            window.__http = {
+                /**
+                 * Perform a synchronous HTTP request
+                 * @param {string} url - The URL to fetch
+                 * @param {string} method - HTTP method (GET, POST, PUT, DELETE, etc.)
+                 * @param {string|null} body - Request body (for POST/PUT)
+                 * @param {string} headersJson - JSON string of headers object
+                 * @returns {object} - {status, ok, text, error?}
+                 */
+                fetchSync(url, method, body, headersJson) {
                     try {
-                        this._db = await new Promise((resolve, reject) => {
-                            // Use same DB name as Rust VFS: "filesystem"
-                            const request = indexedDB.open('filesystem', 1);
-                            request.onerror = () => reject(request.error);
-                            request.onsuccess = () => resolve(request.result);
-                            request.onupgradeneeded = (e) => {
-                                const db = e.target.result;
-                                // Create stores if needed (same as Rust VFS)
-                                if (!db.objectStoreNames.contains('nodes')) {
-                                    db.createObjectStore('nodes');
-                                }
-                                if (!db.objectStoreNames.contains('content')) {
-                                    db.createObjectStore('content');
-                                }
-                                if (!db.objectStoreNames.contains('system_versions')) {
-                                    db.createObjectStore('system_versions');
-                                }
-                            };
-                        });
+                        const xhr = new XMLHttpRequest();
+                        xhr.open(method, url, false); // false = synchronous
 
-                        await this._loadCache();
-                        this._initialized = true;
+                        // Parse and set headers
+                        try {
+                            const headers = JSON.parse(headersJson || '{}');
+                            for (const [key, value] of Object.entries(headers)) {
+                                xhr.setRequestHeader(key, value);
+                            }
+                        } catch (e) {
+                            // Invalid headers JSON, ignore
+                        }
+
+                        // Set default content-type for POST/PUT if not specified
+                        if ((method === 'POST' || method === 'PUT') && body && !headersJson?.includes('Content-Type')) {
+                            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                        }
+
+                        // Send request
+                        xhr.send(body || null);
+
+                        return {
+                            status: xhr.status,
+                            ok: xhr.status >= 200 && xhr.status < 300,
+                            text: xhr.responseText
+                        };
                     } catch (e) {
-                        console.error('[VFS Sync] Init failed:', e);
+                        return {
+                            status: 0,
+                            ok: false,
+                            text: '',
+                            error: e.message || 'Network error'
+                        };
                     }
-                },
-
-                // Load all nodes from IndexedDB into cache
-                async _loadCache() {
-                    if (!this._db) return;
-
-                    // Load nodes
-                    const nodeTx = this._db.transaction(['nodes'], 'readonly');
-                    const nodes = await new Promise((resolve, reject) => {
-                        const request = nodeTx.objectStore('nodes').getAll();
-                        request.onsuccess = () => resolve(request.result || []);
-                        request.onerror = () => reject(request.error);
-                    });
-
-                    this._cache.clear();
-                    for (const node of nodes) {
-                        // Rust VFS stores file_type as object: { File: null } or { Directory: null }
-                        let type = 'file';
-                        if (node.file_type && typeof node.file_type === 'object') {
-                            if ('Directory' in node.file_type) type = 'directory';
-                        } else if (node.file_type === 'Directory') {
-                            type = 'directory';
-                        }
-                        this._cache.set(node.path, {
-                            type: type,
-                            name: node.name,
-                            permissions: node.permissions
-                        });
-                    }
-
-                    // Load file contents
-                    const contentTx = this._db.transaction(['content'], 'readonly');
-                    const contents = await new Promise((resolve, reject) => {
-                        const request = contentTx.objectStore('content').getAll();
-                        request.onsuccess = () => resolve(request.result || []);
-                        request.onerror = () => reject(request.error);
-                    });
-                    const contentKeys = await new Promise((resolve, reject) => {
-                        const request = contentTx.objectStore('content').getAllKeys();
-                        request.onsuccess = () => resolve(request.result || []);
-                        request.onerror = () => reject(request.error);
-                    });
-
-                    // Match content to cache entries by path (key)
-                    for (let i = 0; i < contentKeys.length; i++) {
-                        const path = contentKeys[i];
-                        const contentData = contents[i];
-                        const entry = this._cache.get(path);
-                        if (entry && entry.type === 'file' && contentData) {
-                            // Content is stored as Uint8Array, convert to string for text files
-                            if (contentData instanceof Uint8Array || contentData.buffer) {
-                                try {
-                                    entry.content = new TextDecoder().decode(contentData);
-                                } catch (e) {
-                                    // Binary file, store as bytes
-                                    entry.bytes = contentData;
-                                }
-                            } else if (typeof contentData === 'string') {
-                                entry.content = contentData;
-                            }
-                        }
-                    }
-
-                    console.log('[VFS Sync] Loaded', nodes.length, 'nodes and', contentKeys.length, 'contents into cache');
-                },
-
-                // Refresh cache from IndexedDB (called after Rust VFS init)
-                async refresh() {
-                    console.log('[VFS Sync] Refreshing cache from IndexedDB...');
-                    await this._loadCache();
-                },
-
-                // Synchronous read - returns cached content or fetches on demand
-                readText(path) {
-                    const entry = this._cache.get(path);
-                    if (!entry || entry.type !== 'file') return null;
-                    if (entry.content !== undefined) return entry.content;
-
-                    // Try to load content synchronously (will fail if not cached)
-                    // For system files, we load them during boot
-                    return null;
-                },
-
-                exists(path) {
-                    return this._cache.has(path);
-                },
-
-                listDir(path) {
-                    // Find all direct children of path
-                    const prefix = path.endsWith('/') ? path : path + '/';
-                    const results = [];
-
-                    for (const [entryPath, entry] of this._cache) {
-                        if (entryPath.startsWith(prefix)) {
-                            const remaining = entryPath.slice(prefix.length);
-                            // Only direct children (no further slashes)
-                            if (remaining && !remaining.includes('/')) {
-                                results.push({
-                                    name: entry.name || remaining,
-                                    type: entry.type
-                                });
-                            }
-                        }
-                    }
-
-                    return results;
-                },
-
-                write(path, content) {
-                    this._cache.set(path, {
-                        type: 'file',
-                        name: path.split('/').pop(),
-                        content: content
-                    });
-                    // Async persist to IndexedDB
-                    this._persistNode(path, 'File', content);
-                    return true;
-                },
-
-                mkdir(path) {
-                    if (this._cache.has(path)) return false;
-                    this._cache.set(path, {
-                        type: 'directory',
-                        name: path.split('/').pop()
-                    });
-                    this._persistNode(path, 'Directory', null);
-                    return true;
-                },
-
-                remove(path) {
-                    if (!this._cache.has(path)) return false;
-                    this._cache.delete(path);
-                    this._deleteNode(path);
-                    return true;
-                },
-
-                copy(src, dst) {
-                    const entry = this._cache.get(src);
-                    if (!entry || entry.type !== 'file') return false;
-                    this._cache.set(dst, { ...entry, name: dst.split('/').pop() });
-                    this._persistNode(dst, 'File', entry.content);
-                    return true;
-                },
-
-                move(src, dst) {
-                    if (!this.copy(src, dst)) return false;
-                    return this.remove(src);
-                },
-
-                // Async helpers for IndexedDB persistence
-                // Format matches Rust VFS FileNode structure
-                async _persistNode(path, fileType, content) {
-                    if (!this._db) return;
-                    const tx = this._db.transaction(['nodes', 'content'], 'readwrite');
-                    // Rust VFS stores file_type as { File: null } or { Directory: null }
-                    const fileTypeObj = fileType === 'Directory' ? { Directory: null } : { File: null };
-                    const node = {
-                        path: path,
-                        name: path.split('/').pop(),
-                        file_type: fileTypeObj,
-                        permissions: { readonly: false, system: false, hidden: false },
-                        created: Date.now(),
-                        modified: Date.now(),
-                        size: content ? content.length : 0,
-                        mime_type: null
-                    };
-                    // Rust VFS uses path as key (put_with_key)
-                    tx.objectStore('nodes').put(node, path);
-                    if (content !== null) {
-                        // Rust VFS stores content as ArrayBuffer directly with path as key
-                        const encoder = new TextEncoder();
-                        const buffer = encoder.encode(content).buffer;
-                        tx.objectStore('content').put(buffer, path);
-                    }
-                },
-
-                async _deleteNode(path) {
-                    if (!this._db) return;
-                    const tx = this._db.transaction(['nodes', 'content'], 'readwrite');
-                    tx.objectStore('nodes').delete(path);
-                    tx.objectStore('content').delete(path);
-                },
-
-                // Load file content from IndexedDB into cache
-                // Rust VFS stores content as ArrayBuffer directly (not wrapped in object)
-                async loadContent(path) {
-                    if (!this._db) return null;
-                    const tx = this._db.transaction('content', 'readonly');
-                    const result = await new Promise((resolve) => {
-                        const request = tx.objectStore('content').get(path);
-                        request.onsuccess = () => resolve(request.result);
-                        request.onerror = () => resolve(null);
-                    });
-                    if (result) {
-                        const entry = this._cache.get(path);
-                        if (entry) {
-                            // Rust VFS stores content as ArrayBuffer directly
-                            if (result instanceof ArrayBuffer) {
-                                entry.content = new TextDecoder().decode(result);
-                            } else if (result instanceof Uint8Array) {
-                                entry.content = new TextDecoder().decode(result);
-                            } else if (typeof result === 'string') {
-                                entry.content = result;
-                            } else if (result.data) {
-                                // Fallback for old format
-                                entry.content = result.data instanceof Uint8Array
-                                    ? new TextDecoder().decode(result.data)
-                                    : result.data;
-                            }
-                        }
-                        return entry?.content;
-                    }
-                    return null;
-                },
-
-                // Read binary file content - returns Uint8Array or null
-                readBytes(path) {
-                    const entry = this._cache.get(path);
-                    if (!entry || entry.type !== 'file') return null;
-                    if (entry.bytes !== undefined) return entry.bytes;
-                    // If we have string content, encode it
-                    if (entry.content !== undefined) {
-                        return new TextEncoder().encode(entry.content);
-                    }
-                    return null;
-                },
-
-                // Write binary file content - takes Uint8Array
-                writeBytes(path, bytes) {
-                    this._cache.set(path, {
-                        type: 'file',
-                        name: path.split('/').pop(),
-                        bytes: bytes
-                    });
-                    this._persistNodeBytes(path, bytes);
-                    return true;
-                },
-
-                // Persist binary content to IndexedDB
-                async _persistNodeBytes(path, bytes) {
-                    if (!this._db) return;
-                    const tx = this._db.transaction(['nodes', 'content'], 'readwrite');
-                    const fileTypeObj = { File: null };
-                    const node = {
-                        path: path,
-                        name: path.split('/').pop(),
-                        file_type: fileTypeObj,
-                        permissions: { readonly: false, system: false, hidden: false },
-                        created: Date.now(),
-                        modified: Date.now(),
-                        size: bytes.length,
-                        mime_type: null
-                    };
-                    tx.objectStore('nodes').put(node, path);
-                    tx.objectStore('content').put(bytes.buffer, path);
-                },
-
-                // Load binary content from IndexedDB into cache
-                async loadBytes(path) {
-                    if (!this._db) return null;
-                    const tx = this._db.transaction('content', 'readonly');
-                    const result = await new Promise((resolve) => {
-                        const request = tx.objectStore('content').get(path);
-                        request.onsuccess = () => resolve(request.result);
-                        request.onerror = () => resolve(null);
-                    });
-                    if (result) {
-                        const entry = this._cache.get(path);
-                        let bytes;
-                        if (result instanceof ArrayBuffer) {
-                            bytes = new Uint8Array(result);
-                        } else if (result instanceof Uint8Array) {
-                            bytes = result;
-                        } else {
-                            return null;
-                        }
-                        if (entry) {
-                            entry.bytes = bytes;
-                        }
-                        return bytes;
-                    }
-                    return null;
-                },
-
-                // Get data URL for a file (for images, icons, etc.) - used by Rust
-                getDataUrl(path) {
-                    const entry = this._cache.get(path);
-                    if (!entry || entry.type !== 'file') return null;
-
-                    // Determine MIME type from extension
-                    const ext = path.split('.').pop()?.toLowerCase() || '';
-                    const mimeTypes = {
-                        'png': 'image/png',
-                        'jpg': 'image/jpeg',
-                        'jpeg': 'image/jpeg',
-                        'gif': 'image/gif',
-                        'webp': 'image/webp',
-                        'svg': 'image/svg+xml',
-                        'ico': 'image/x-icon'
-                    };
-                    const mimeType = mimeTypes[ext] || 'application/octet-stream';
-
-                    // Get bytes
-                    let bytes = entry.bytes;
-                    if (!bytes && entry.content) {
-                        bytes = new TextEncoder().encode(entry.content);
-                    }
-                    if (!bytes) return null;
-
-                    // Convert to base64
-                    let binary = '';
-                    for (let i = 0; i < bytes.length; i++) {
-                        binary += String.fromCharCode(bytes[i]);
-                    }
-                    const base64 = btoa(binary);
-                    return `data:${mimeType};base64,${base64}`;
                 }
             };
 
-            // Initialize VFS sync cache before loading WASM
-            window.__vfsSync.init().then(() => {
-                import(`/resources/script/fabi_sc_code.js?dev_stamp=${timestamp}`)
-                .then(module => {
-                    return module.default(`/resources/script/fabi_sc_code_bg.wasm?dev_stamp=${timestamp}`);
-                })
-                .then(() => {
-                    // WASM loaded, wait 3 more seconds then signal boot complete
-                    setTimeout(() => {
-                        window.__bootComplete = true;
-                        document.getElementById('static-boot-screen')?.classList.add('display-none');
-                    }, 3000);
-                })
-                .catch(error => console.error("WASM init failed:", error));
-            });
+            // Load WASM module
+            import(`/resources/script/fabi_sc_code.js?dev_stamp=${timestamp}`)
+            .then(module => {
+                return module.default(`/resources/script/fabi_sc_code_bg.wasm?dev_stamp=${timestamp}`);
+            })
+            .then(() => {
+                // WASM loaded, wait 3 more seconds then signal boot complete
+                setTimeout(() => {
+                    window.__bootComplete = true;
+                    document.getElementById('static-boot-screen')?.classList.add('display-none');
+                }, 3000);
+            })
+            .catch(error => console.error("WASM init failed:", error));
         </script>
     </body>
 </html>

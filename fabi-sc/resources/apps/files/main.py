@@ -89,6 +89,29 @@ toolbar_style = ui.style(
     border_bottom="1px solid #313244"
 )
 
+# Mobile-specific styles
+mobile_toolbar_style = ui.style(
+    background="#181825",
+    padding="8px 12px",
+    display="flex",
+    flex_direction="row",
+    align_items="center",
+    gap="8px",
+    border_bottom="1px solid #313244"
+)
+
+mobile_bottom_bar_style = ui.style(
+    background="#181825",
+    padding="10px 16px",
+    display="flex",
+    flex_direction="row",
+    align_items="center",
+    justify_content="space-around",
+    gap="8px",
+    border_top="1px solid #313244",
+    flex_shrink="0"
+)
+
 path_bar_style = ui.style(
     background="#11111b",
     border="1px solid #313244",
@@ -667,7 +690,7 @@ def build_file_list():
     return ui.column(file_items, style=file_list_style)
 
 def build_toolbar():
-    """Build the toolbar with navigation and actions"""
+    """Build the toolbar with navigation and actions (desktop)"""
     toolbar_items = [
         ui.button("", icon="fa-solid fa-arrow-up", style=btn_icon_style, on_click="go_up"),
         ui.button("", icon="fa-solid fa-house", style=btn_icon_style, on_click="go_home"),
@@ -683,6 +706,30 @@ def build_toolbar():
         ])
 
     return ui.container(toolbar_items, style=toolbar_style)
+
+def build_mobile_toolbar():
+    """Build mobile toolbar with just navigation and path"""
+    toolbar_items = [
+        ui.button("", icon="fa-solid fa-arrow-up", style=btn_icon_style, on_click="go_up"),
+        ui.label(current_path, style=path_bar_style),
+    ]
+    return ui.container(toolbar_items, style=mobile_toolbar_style)
+
+def build_mobile_bottom_bar():
+    """Build mobile bottom bar with action buttons"""
+    bottom_items = [
+        ui.button("", icon="fa-solid fa-house", style=btn_icon_style, on_click="go_home"),
+        ui.button("", icon="fa-solid fa-file-circle-plus", style=btn_icon_style, on_click="show_new_file_modal"),
+        ui.button("", icon="fa-solid fa-folder-plus", style=btn_icon_style, on_click="show_new_folder_modal"),
+    ]
+
+    if selected_index >= 0:
+        bottom_items.extend([
+            ui.button("", icon="fa-solid fa-pen", style=btn_icon_style, on_click="show_rename_modal"),
+            ui.button("", icon="fa-solid fa-trash", style=btn_icon_style, on_click="show_delete_modal"),
+        ])
+
+    return ui.container(bottom_items, style=mobile_bottom_bar_style)
 
 def build_modal():
     """Build modal dialog if needed"""
@@ -786,9 +833,13 @@ def render():
         ui.container([sidebar, content_area], style=container_style)
     ], style=ui.style(height="100%"))
 
-    # Mobile layout: just content (no sidebar)
+    # Mobile layout: toolbar at top, file list in middle, bottom bar for actions
+    mobile_toolbar = build_mobile_toolbar()
+    mobile_file_list = build_file_list()
+    mobile_bottom_bar = build_mobile_bottom_bar()
+
     mobile_layout = ui.mobile_only([
-        ui.container([toolbar, file_list], style=mobile_container_style)
+        ui.container([mobile_toolbar, mobile_file_list, mobile_bottom_bar], style=mobile_container_style)
     ], style=ui.style(height="100%"))
 
     parts = [desktop_layout, mobile_layout]

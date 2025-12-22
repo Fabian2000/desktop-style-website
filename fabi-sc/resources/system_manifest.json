@@ -84,7 +84,7 @@
     {
       "path": "/home/.system/apps/files/main.py",
       "server_path": "/resources/apps/files/main.py",
-      "hash": "files_main_v12",
+      "hash": "files_main_v13",
       "permissions": {
         "readonly": true,
         "system": true,

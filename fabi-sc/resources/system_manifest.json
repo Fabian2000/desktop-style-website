@@ -24,7 +24,7 @@
     {
       "path": "/home/.system/apps/terminal/main.py",
       "server_path": "/resources/apps/terminal/main.py",
-      "hash": "terminal_main_v26",
+      "hash": "terminal_main_v37",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -54,7 +54,7 @@
     {
       "path": "/home/.system/apps/help/main.py",
       "server_path": "/resources/apps/help/main.py",
-      "hash": "help_main_v17",
+      "hash": "help_main_v21",
       "permissions": {
         "readonly": true,
         "system": true,

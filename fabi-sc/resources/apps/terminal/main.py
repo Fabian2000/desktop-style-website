@@ -112,12 +112,29 @@ class Shell:
         except (ValueError, TypeError):
             self.sudo_attempts = 0
 
-        # Aliases - load from state or use defaults (stored as JSON string)
-        _saved_aliases = state.get("aliases")
+        # Aliases - load from state or use defaults
+        # Format: "key1=value1\nkey2=value2\n..."
+        _saved_aliases = state.get("aliases_v2")
         if _saved_aliases and isinstance(_saved_aliases, str):
             try:
-                import json
-                self.aliases = json.loads(_saved_aliases)
+                self.aliases = {}
+                for line in _saved_aliases.split("\n"):
+                    if "=" in line:
+                        # Find first unescaped =
+                        idx = 0
+                        while idx < len(line):
+                            if line[idx] == "\\" and idx + 1 < len(line):
+                                idx += 2  # Skip escaped char
+                            elif line[idx] == "=":
+                                break
+                            else:
+                                idx += 1
+                        if idx < len(line):
+                            k = line[:idx]
+                            v = line[idx + 1:]
+                            # Unescape value
+                            v = v.replace("\\=", "=").replace("\\n", "\n").replace("\\\\", "\\")
+                            self.aliases[k] = v
             except:
                 self.aliases = {
                     "ll": "ls -l",
@@ -193,6 +210,9 @@ class Shell:
         # Sudo
         self.register("sudo", cmd_sudo, "Execute as superuser")
 
+        # Debug
+        self.register("debug-aliases", cmd_debug_aliases, "Debug: show loaded aliases")
+
     def register(self, name, func, description=""):
         """Register a command - makes extending easy"""
         self.commands[name] = {"func": func, "desc": description}
@@ -213,9 +233,14 @@ class Shell:
             state.set("pending_sudo_cmd", self.pending_sudo_cmd if self.pending_sudo_cmd else "")
             # IMPORTANT: state.set() only accepts strings!
             state.set("sudo_attempts", str(self.sudo_attempts if self.sudo_attempts else 0))
-            # Aliases stored as JSON string
-            import json
-            state.set("aliases", json.dumps(self.aliases if self.aliases else {}))
+            # Aliases: serialize manually (no json module available)
+            # Format: "key1=value1\nkey2=value2\n..."
+            alias_lines = []
+            for k, v in self.aliases.items():
+                # Escape newlines and equals in values
+                escaped_v = v.replace("\\", "\\\\").replace("\n", "\\n").replace("=", "\\=")
+                alias_lines.append(f"{k}={escaped_v}")
+            state.set("aliases_v2", "\n".join(alias_lines))
         except Exception as e:
             # Silently fail - don't break terminal on state save errors
             pass
@@ -271,8 +296,13 @@ class Shell:
         """Expand aliases in command"""
         parts = cmd.strip().split()
         if parts and parts[0] in self.aliases:
-            return self.aliases[parts[0]] + " " + " ".join(parts[1:])
+            expanded = self.aliases[parts[0]] + " " + " ".join(parts[1:])
+            return expanded.strip()
         return cmd
+
+    def debug_aliases(self):
+        """Debug: show current aliases"""
+        return str(self.aliases)
 
     def parse_command(self, cmd_line):
         """Parse command line into command and args, handling quotes"""
@@ -462,13 +492,25 @@ class Shell:
         command = args[0]
         cmd_args = args[1:]
 
+        # Extract raw args string (everything after the command)
+        # This is needed for commands like alias that need unparsed input
+        raw_args = None
+        cmd_line_stripped = cmd_line.strip()
+        if len(command) < len(cmd_line_stripped):
+            raw_args = cmd_line_stripped[len(command):].strip()
+
         # Store stdin for commands that need it
         self.stdin = stdin
 
         # Check if command exists
         if command in self.commands:
             try:
-                result = self.commands[command]["func"](self, cmd_args)
+                func = self.commands[command]["func"]
+                # Commands that need raw_args (unparsed input)
+                if command in ("alias",):
+                    result = func(self, cmd_args, raw_args=raw_args)
+                else:
+                    result = func(self, cmd_args)
                 return result if result is not None else 0
             except Exception as e:
                 self.output(f"{command}: error: {e}")
@@ -1177,25 +1219,61 @@ def cmd_history(shell, args):
         shell.output(f"  {i:>4}  {cmd}")
     return 0
 
-def cmd_alias(shell, args):
-    """Show or set aliases"""
+def cmd_alias(shell, args, raw_args=None):
+    """Show or set aliases
+
+    Usage like Linux:
+      alias              - show all aliases
+      alias name         - show specific alias
+      alias name=value   - set alias (no spaces around =)
+      alias name='value with spaces'
+    """
     if not args:
         for name, value in sorted(shell.aliases.items()):
             shell.output(f"alias {name}='{value}'")
         return 0
 
-    for arg in args:
-        if "=" in arg:
-            name, value = arg.split("=", 1)
-            # Remove quotes if present
-            value = value.strip("'\"")
+    # Use raw_args if available (preserves quotes), otherwise join args
+    if raw_args:
+        alias_str = raw_args
+    else:
+        alias_str = " ".join(args)
+
+    # Check if this is an assignment (contains = not inside quotes)
+    if "=" in alias_str:
+        # Find the first = that's not inside quotes
+        eq_pos = -1
+        in_quotes = False
+        quote_char = None
+        for i, c in enumerate(alias_str):
+            if c in "\"'" and not in_quotes:
+                in_quotes = True
+                quote_char = c
+            elif c == quote_char and in_quotes:
+                in_quotes = False
+                quote_char = None
+            elif c == "=" and not in_quotes:
+                eq_pos = i
+                break
+
+        if eq_pos > 0:
+            name = alias_str[:eq_pos]
+            value = alias_str[eq_pos + 1:]
+            # Remove surrounding quotes from value if present
+            if len(value) >= 2:
+                if (value[0] == "'" and value[-1] == "'") or (value[0] == '"' and value[-1] == '"'):
+                    value = value[1:-1]
             shell.aliases[name] = value
+            shell.save_state()  # Persist alias immediately
+            return 0
+
+    # No =, so show alias for given name(s)
+    for arg in args:
+        if arg in shell.aliases:
+            shell.output(f"alias {arg}='{shell.aliases[arg]}'")
         else:
-            if arg in shell.aliases:
-                shell.output(f"alias {arg}='{shell.aliases[arg]}'")
-            else:
-                shell.output(f"alias: {arg}: not found")
-                return 1
+            shell.output(f"alias: {arg}: not found")
+            return 1
     return 0
 
 def cmd_unalias(shell, args):
@@ -1210,6 +1288,7 @@ def cmd_unalias(shell, args):
         else:
             shell.output(f"unalias: {arg}: not found")
             return 1
+    shell.save_state()  # Persist removal
     return 0
 
 def cmd_which(shell, args):
@@ -1266,6 +1345,21 @@ def cmd_sudo(shell, args):
     shell.sudo_attempts = 0
     shell.input_mode = "password"
 
+    return 0
+
+def cmd_debug_aliases(shell, args):
+    """Debug: show loaded aliases and state"""
+    shell.output("=== Current aliases in memory ===")
+    shell.output(str(shell.aliases))
+    shell.output("")
+    shell.output("=== Aliases in state (aliases_v2) ===")
+    saved = state.get("aliases_v2")
+    shell.output(f"Raw: {saved}")
+    shell.output("")
+    shell.output("=== Testing state.set() ===")
+    state.set("test_key", "test_value")
+    result = state.get("test_key")
+    shell.output(f"Set 'test_key' to 'test_value', got back: {result}")
     return 0
 
 # ============================================================================

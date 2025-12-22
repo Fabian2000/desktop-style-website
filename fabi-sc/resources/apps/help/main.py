@@ -33,7 +33,8 @@ sidebar_style = ui.style(
     flex_direction="column",
     gap="2px",
     flex_shrink="0",
-    height="100%"
+    height="100%",
+    box_sizing="border-box"
 )
 
 mobile_sidebar_style = ui.style(
@@ -164,12 +165,15 @@ Available APIs:
   - fabiscos_window - Window control
   - fabiscos_vfs - Virtual filesystem
   - fabiscos_csv - CSV parsing/writing
+  - fabiscos_json - JSON encoding/decoding
   - fabiscos_archive - ZIP file handling
   - fabiscos_state - Persistent state storage
 
   Utility:
   - fabiscos_time - Time and date functions
   - fabiscos_random - Random number generation
+  - fabiscos_math - Mathematical functions
+  - fabiscos_re - Regular expressions
   - fabiscos_base64 - Base64 encoding/decoding
   - fabiscos_hash - Cryptographic hashes
   - fabiscos_crypto - AES-256 encryption
@@ -401,7 +405,22 @@ Example:
   archive.zip(["/home/Documents"], "/home/backup.zip")
 
   # Extract
-  archive.unzip("/home/backup.zip", "/home/extracted")"""
+  archive.unzip("/home/backup.zip", "/home/extracted")
+
+JSON - JavaScript Object Notation
+  import fabiscos_json as json
+
+Parsing:
+  json.loads(json_string)        - Parse to Python object
+  json.dumps(obj)                - Convert to JSON string
+  json.dumps_pretty(obj)         - Pretty-printed JSON
+
+Example:
+  data = json.loads('{"name": "Test", "count": 42}')
+  print(data["name"])  # "Test"
+
+  settings = {"theme": "dark", "volume": 80}
+  vfs.write("/home/settings.json", json.dumps(settings))"""
     },
     "state": {
         "title": "State API",
@@ -474,6 +493,190 @@ Example - Display current time:
 Example - Create specific date:
   christmas = time.timestamp(2024, 12, 25, 0, 0, 0)
   print(time.format_date(christmas))"""
+    },
+    "math": {
+        "title": "Math API",
+        "content": """import fabiscos_math as math
+
+Constants:
+  math.pi()          - 3.14159265...
+  math.e()           - 2.71828182...
+  math.tau()         - 6.28318530... (2*pi)
+  math.inf()         - Positive infinity
+  math.nan()         - Not a Number
+
+Basic arithmetic:
+  math.abs(x)        - Absolute value
+  math.floor(x)      - Round down
+  math.ceil(x)       - Round up
+  math.round(x)      - Round to nearest
+  math.trunc(x)      - Remove fractional part
+  math.sign(x)       - Returns -1, 0, or 1
+  math.copysign(x, y) - x with sign of y
+  math.fmod(x, y)    - Modulo (remainder)
+  math.modf(x)       - (fractional, integer) parts
+
+Powers and roots:
+  math.sqrt(x)       - Square root
+  math.cbrt(x)       - Cube root
+  math.pow(x, y)     - x^y
+  math.hypot(x, y)   - sqrt(x² + y²)
+
+Exponential and logarithmic:
+  math.exp(x)        - e^x
+  math.exp2(x)       - 2^x
+  math.expm1(x)      - e^x - 1 (accurate for small x)
+  math.log(x)        - Natural log (base e)
+  math.log10(x)      - Base-10 log
+  math.log2(x)       - Base-2 log
+  math.log1p(x)      - log(1 + x)
+  math.logn(x, base) - Log with arbitrary base
+
+Trigonometry (radians):
+  math.sin(x), math.cos(x), math.tan(x)
+  math.asin(x), math.acos(x), math.atan(x)
+  math.atan2(y, x)   - Quadrant-aware atan
+
+Hyperbolic:
+  math.sinh(x), math.cosh(x), math.tanh(x)
+  math.asinh(x), math.acosh(x), math.atanh(x)
+
+Angular conversion:
+  math.degrees(rad)  - Radians to degrees
+  math.radians(deg)  - Degrees to radians
+
+Special functions:
+  math.factorial(n)  - n! (max n=20)
+  math.gcd(a, b)     - Greatest common divisor
+  math.lcm(a, b)     - Least common multiple
+
+Check functions:
+  math.isfinite(x)   - True if finite
+  math.isinf(x)      - True if infinite
+  math.isnan(x)      - True if NaN
+  math.isclose(a, b, rel_tol=1e-9, abs_tol=0)
+
+Aggregation:
+  math.sum([...])    - Sum of list
+  math.prod([...])   - Product of list
+  math.min([...])    - Minimum value
+  math.max([...])    - Maximum value
+
+Utility:
+  math.clamp(x, min, max)   - Clamp to range
+  math.lerp(a, b, t)        - Linear interpolation
+  math.map_range(x, in_min, in_max, out_min, out_max)
+
+Examples:
+  # Circle area
+  area = math.pi() * math.pow(radius, 2)
+
+  # Distance between points
+  d = math.hypot(x2-x1, y2-y1)
+
+  # Degree to radian conversion
+  angle_rad = math.radians(45)
+  print(math.sin(angle_rad))  # 0.707...
+
+  # Percentage calculation
+  percent = math.map_range(value, 0, 100, 0, 1)"""
+    },
+    "regex": {
+        "title": "Regex API",
+        "content": """import fabiscos_re as re
+
+Flags (optional string, combine as needed):
+  "i" - Case insensitive
+  "m" - Multi-line (^ $ match line boundaries)
+  "s" - Dot matches newline
+  "x" - Ignore whitespace in pattern
+
+Basic matching:
+  re.test(pattern, text, flags=None)
+    - Returns True if match found
+
+  re.search(pattern, text, flags=None)
+    - Returns {match, start, end, groups} or None
+
+  re.match_start(pattern, text, flags=None)
+    - Match at beginning only
+
+  re.fullmatch(pattern, text, flags=None)
+    - Returns True if entire text matches
+
+Find all matches:
+  re.findall(pattern, text, flags=None)
+    - List of matched strings
+
+  re.findall_groups(pattern, text, flags=None)
+    - List of {match, start, end, groups}
+
+  re.finditer(pattern, text, flags=None)
+    - List of (start, end) tuples
+
+  re.count(pattern, text, flags=None)
+    - Number of matches
+
+Replace:
+  re.sub(pattern, replacement, text, flags=None)
+    - Replace all matches
+    - Supports $1, $2, ${name} backreferences
+
+  re.subn(pattern, replacement, text, count, flags=None)
+    - Replace first n matches (0 = all)
+    - Returns (result, num_replaced)
+
+Split:
+  re.split(pattern, text, flags=None)
+    - Split by pattern
+
+  re.splitn(pattern, text, max_splits, flags=None)
+    - Split with limit (0 = unlimited)
+
+Named groups:
+  re.search_named(pattern, text, flags=None)
+    - Pattern: (?P<name>...)
+    - Returns dict with group names as keys
+
+  re.group_names(pattern, flags=None)
+    - List of capture group names
+
+Utility:
+  re.escape(text)
+    - Escape special regex characters
+
+  re.validate(pattern, flags=None)
+    - None if valid, error message if not
+
+Examples:
+  # Email validation
+  if re.test(r"[\\w.-]+@[\\w.-]+\\.\\w+", email):
+      print("Valid email")
+
+  # Extract numbers
+  nums = re.findall(r"\\d+", "abc123def456")
+  # ["123", "456"]
+
+  # Parse key=value pairs
+  m = re.search_named(
+      r"(?P<key>\\w+)=(?P<value>\\w+)",
+      "name=John")
+  print(m["key"], m["value"])  # "name" "John"
+
+  # Replace with groups
+  result = re.sub(
+      r"(\\w+)@(\\w+)",
+      "$1 at $2",
+      "user@domain")
+  # "user at domain"
+
+  # Case insensitive search
+  if re.test("hello", "HELLO WORLD", "i"):
+      print("Found!")
+
+  # Split by multiple delimiters
+  parts = re.split(r"[,;\\s]+", "a, b; c d")
+  # ["a", "b", "c", "d"]"""
     },
     "random": {
         "title": "Random API",
@@ -735,6 +938,8 @@ nav_structure = [
     ("section", "Utility APIs"),
     ("time", "Time"),
     ("random", "Random"),
+    ("math", "Math"),
+    ("regex", "Regex"),
     ("encoding", "Encoding & Crypto"),
     ("http", "HTTP"),
     ("notify", "Notify"),
@@ -770,6 +975,8 @@ def nav_files(): nav_to("files")
 def nav_state(): nav_to("state")
 def nav_time(): nav_to("time")
 def nav_random(): nav_to("random")
+def nav_math(): nav_to("math")
+def nav_regex(): nav_to("regex")
 def nav_encoding(): nav_to("encoding")
 def nav_http(): nav_to("http")
 def nav_notify(): nav_to("notify")
@@ -785,6 +992,8 @@ nav_handlers = {
     "state": "nav_state",
     "time": "nav_time",
     "random": "nav_random",
+    "math": "nav_math",
+    "regex": "nav_regex",
     "encoding": "nav_encoding",
     "http": "nav_http",
     "notify": "nav_notify",

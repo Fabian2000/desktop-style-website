@@ -5,8 +5,9 @@
 
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{MouseEvent, TouchEvent};
+use web_sys::{Event, HtmlImageElement, MouseEvent, TouchEvent};
 use yew::prelude::*;
 
 /// Info about an open app for display in recents
@@ -320,7 +321,22 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
                                         </div>
                                         <div class="recents-card-preview">
                                             if let Some(ref img_src) = preview_image {
-                                                <img src={img_src.clone()} alt="Window Preview" class="preview-image" />
+                                                // Icon as fallback (visible when image fails or while loading)
+                                                <i class={format!("{} fa-4x preview-fallback", icon_class)}></i>
+                                                // Image with onerror callback to hide on failure
+                                                <img
+                                                    src={img_src.clone()}
+                                                    alt=""
+                                                    class="preview-image"
+                                                    onerror={Callback::from(|e: Event| {
+                                                        // Hide the image element on error
+                                                        if let Some(target) = e.target() {
+                                                            if let Some(img) = target.dyn_ref::<HtmlImageElement>() {
+                                                                img.set_hidden(true);
+                                                            }
+                                                        }
+                                                    })}
+                                                />
                                             } else {
                                                 <i class={format!("{} fa-4x", icon_class)}></i>
                                             }

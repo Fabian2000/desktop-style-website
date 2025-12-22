@@ -143,6 +143,9 @@ impl PythonRuntime {
             vm.add_native_module("fabiscos_hash".to_owned(), Box::new(fabiscos_hash::make_module));
             vm.add_native_module("fabiscos_crypto".to_owned(), Box::new(fabiscos_crypto::make_module));
             vm.add_native_module("fabiscos_csv".to_owned(), Box::new(fabiscos_csv::make_module));
+            vm.add_native_module("fabiscos_json".to_owned(), Box::new(fabiscos_json::make_module));
+            vm.add_native_module("fabiscos_math".to_owned(), Box::new(fabiscos_math::make_module));
+            vm.add_native_module("fabiscos_re".to_owned(), Box::new(fabiscos_re::make_module));
             vm.add_native_module("fabiscos_archive".to_owned(), Box::new(fabiscos_archive::make_module));
             vm.add_native_module("fabiscos_http".to_owned(), Box::new(fabiscos_http::make_module));
             vm.add_native_module("fabiscos_notify".to_owned(), Box::new(fabiscos_notify::make_module));
@@ -1510,6 +1513,878 @@ mod fabiscos_csv {
         }
         let data = writer.into_inner().unwrap_or_default();
         String::from_utf8(data).unwrap_or_default()
+    }
+}
+
+/// fabiscos_json - JSON encoding/decoding
+#[pymodule]
+mod fabiscos_json {
+    use rustpython_vm::{VirtualMachine, PyResult, PyObjectRef};
+    use rustpython_vm::builtins::{PyDict, PyList};
+
+    /// Parse JSON string to Python object (dict, list, str, int, float, bool, None)
+    #[pyfunction]
+    fn loads(json_str: String, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let value: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| vm.new_value_error(format!("Invalid JSON: {}", e)))?;
+        json_to_python(value, vm)
+    }
+
+    /// Convert Python object to JSON string
+    #[pyfunction]
+    fn dumps(obj: PyObjectRef, vm: &VirtualMachine) -> PyResult<String> {
+        let value = python_to_json(obj, vm)?;
+        serde_json::to_string(&value)
+            .map_err(|e| vm.new_value_error(format!("JSON serialization error: {}", e)))
+    }
+
+    /// Convert Python object to pretty-printed JSON string
+    #[pyfunction]
+    fn dumps_pretty(obj: PyObjectRef, vm: &VirtualMachine) -> PyResult<String> {
+        let value = python_to_json(obj, vm)?;
+        serde_json::to_string_pretty(&value)
+            .map_err(|e| vm.new_value_error(format!("JSON serialization error: {}", e)))
+    }
+
+    fn json_to_python(value: serde_json::Value, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        use serde_json::Value;
+        match value {
+            Value::Null => Ok(vm.ctx.none()),
+            Value::Bool(b) => Ok(vm.ctx.new_bool(b).into()),
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(vm.ctx.new_int(i).into())
+                } else if let Some(f) = n.as_f64() {
+                    Ok(vm.ctx.new_float(f).into())
+                } else {
+                    Ok(vm.ctx.none())
+                }
+            }
+            Value::String(s) => Ok(vm.ctx.new_str(s).into()),
+            Value::Array(arr) => {
+                let mut items = vec![];
+                for item in arr {
+                    items.push(json_to_python(item, vm)?);
+                }
+                Ok(vm.ctx.new_list(items).into())
+            }
+            Value::Object(obj) => {
+                let dict = PyDict::new_ref(&vm.ctx);
+                for (k, v) in obj {
+                    let _ = dict.set_item(&k, json_to_python(v, vm)?, vm);
+                }
+                Ok(dict.into())
+            }
+        }
+    }
+
+    fn python_to_json(obj: PyObjectRef, vm: &VirtualMachine) -> PyResult<serde_json::Value> {
+        use serde_json::Value;
+        use rustpython_vm::builtins::{PyInt, PyFloat, PyStr};
+        use rustpython_vm::AsObject;
+
+        // Check for None
+        if vm.is_none(&obj) {
+            return Ok(Value::Null);
+        }
+
+        // Get type name for checking
+        let type_name = obj.class().name().to_string();
+
+        // Check for bool (must be before int, as bool is subclass of int in Python)
+        if type_name == "bool" {
+            // Get bool value by checking if it's the True singleton
+            let is_true = obj.is(&vm.ctx.true_value);
+            return Ok(Value::Bool(is_true));
+        }
+
+        // Check for int - convert via string representation to avoid BigInt trait issues
+        if let Some(i) = obj.payload::<PyInt>() {
+            let int_str = i.as_bigint().to_string();
+            if let Ok(val) = int_str.parse::<i64>() {
+                return Ok(Value::Number(val.into()));
+            }
+            return Err(vm.new_value_error("Integer too large for JSON".to_string()));
+        }
+
+        // Check for float
+        if let Some(f) = obj.payload::<PyFloat>() {
+            let val = f.to_f64();
+            if let Some(n) = serde_json::Number::from_f64(val) {
+                return Ok(Value::Number(n));
+            }
+            return Err(vm.new_value_error("Cannot serialize NaN or Infinity".to_string()));
+        }
+
+        // Check for string
+        if let Some(s) = obj.payload::<PyStr>() {
+            return Ok(Value::String(s.as_str().to_string()));
+        }
+
+        // Check for list
+        if let Some(list) = obj.payload::<PyList>() {
+            let mut arr = vec![];
+            for item in list.borrow_vec().iter() {
+                arr.push(python_to_json(item.clone(), vm)?);
+            }
+            return Ok(Value::Array(arr));
+        }
+
+        // Check for dict
+        if let Some(dict) = obj.payload::<PyDict>() {
+            let mut map = serde_json::Map::new();
+            for (k, v) in dict.into_iter() {
+                let key_str = k.str(vm)
+                    .map_err(|_| vm.new_value_error("Dict key must be string".to_string()))?
+                    .as_str()
+                    .to_string();
+                map.insert(key_str, python_to_json(v, vm)?);
+            }
+            return Ok(Value::Object(map));
+        }
+
+        Err(vm.new_type_error(format!("Object of type {} is not JSON serializable", type_name)))
+    }
+}
+
+/// fabiscos_math - Mathematical functions
+#[pymodule]
+mod fabiscos_math {
+    use rustpython_vm::{VirtualMachine, PyResult};
+
+    // ===== Constants =====
+
+    /// Mathematical constant pi (π ≈ 3.14159...)
+    #[pyfunction]
+    fn pi(_vm: &VirtualMachine) -> f64 {
+        std::f64::consts::PI
+    }
+
+    /// Mathematical constant e (Euler's number ≈ 2.71828...)
+    #[pyfunction]
+    fn e(_vm: &VirtualMachine) -> f64 {
+        std::f64::consts::E
+    }
+
+    /// Positive infinity
+    #[pyfunction]
+    fn inf(_vm: &VirtualMachine) -> f64 {
+        f64::INFINITY
+    }
+
+    /// Not a Number (NaN)
+    #[pyfunction]
+    fn nan(_vm: &VirtualMachine) -> f64 {
+        f64::NAN
+    }
+
+    /// Tau (τ = 2π ≈ 6.28318...)
+    #[pyfunction]
+    fn tau(_vm: &VirtualMachine) -> f64 {
+        std::f64::consts::TAU
+    }
+
+    // ===== Basic arithmetic =====
+
+    /// Absolute value
+    #[pyfunction]
+    fn abs(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.abs()
+    }
+
+    /// Floor (round down)
+    #[pyfunction]
+    fn floor(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.floor()
+    }
+
+    /// Ceiling (round up)
+    #[pyfunction]
+    fn ceil(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.ceil()
+    }
+
+    /// Round to nearest integer
+    #[pyfunction]
+    fn round(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.round()
+    }
+
+    /// Truncate (remove fractional part)
+    #[pyfunction]
+    fn trunc(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.trunc()
+    }
+
+    /// Sign of number: -1, 0, or 1
+    #[pyfunction]
+    fn sign(x: f64, _vm: &VirtualMachine) -> f64 {
+        if x > 0.0 { 1.0 } else if x < 0.0 { -1.0 } else { 0.0 }
+    }
+
+    /// Copy sign from y to x
+    #[pyfunction]
+    fn copysign(x: f64, y: f64, _vm: &VirtualMachine) -> f64 {
+        x.copysign(y)
+    }
+
+    /// Modulo (remainder)
+    #[pyfunction]
+    fn fmod(x: f64, y: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if y == 0.0 {
+            Err(vm.new_value_error("math domain error: fmod by zero".to_string()))
+        } else {
+            Ok(x % y)
+        }
+    }
+
+    /// Return integer and fractional parts
+    #[pyfunction]
+    fn modf(x: f64, vm: &VirtualMachine) -> (f64, f64) {
+        let _ = vm;
+        (x.fract(), x.trunc())
+    }
+
+    // ===== Powers and roots =====
+
+    /// Square root
+    #[pyfunction]
+    fn sqrt(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x < 0.0 {
+            Err(vm.new_value_error("math domain error: sqrt of negative number".to_string()))
+        } else {
+            Ok(x.sqrt())
+        }
+    }
+
+    /// Cube root
+    #[pyfunction]
+    fn cbrt(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.cbrt()
+    }
+
+    /// Power (x^y)
+    #[pyfunction]
+    fn pow(x: f64, y: f64, _vm: &VirtualMachine) -> f64 {
+        x.powf(y)
+    }
+
+    /// Euclidean distance sqrt(x² + y²)
+    #[pyfunction]
+    fn hypot(x: f64, y: f64, _vm: &VirtualMachine) -> f64 {
+        x.hypot(y)
+    }
+
+    // ===== Exponential and logarithmic =====
+
+    /// e^x
+    #[pyfunction]
+    fn exp(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.exp()
+    }
+
+    /// 2^x
+    #[pyfunction]
+    fn exp2(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.exp2()
+    }
+
+    /// e^x - 1 (accurate for small x)
+    #[pyfunction]
+    fn expm1(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.exp_m1()
+    }
+
+    /// Natural logarithm (base e)
+    #[pyfunction]
+    fn log(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x <= 0.0 {
+            Err(vm.new_value_error("math domain error: log of non-positive number".to_string()))
+        } else {
+            Ok(x.ln())
+        }
+    }
+
+    /// Base-10 logarithm
+    #[pyfunction]
+    fn log10(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x <= 0.0 {
+            Err(vm.new_value_error("math domain error: log10 of non-positive number".to_string()))
+        } else {
+            Ok(x.log10())
+        }
+    }
+
+    /// Base-2 logarithm
+    #[pyfunction]
+    fn log2(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x <= 0.0 {
+            Err(vm.new_value_error("math domain error: log2 of non-positive number".to_string()))
+        } else {
+            Ok(x.log2())
+        }
+    }
+
+    /// log(1 + x) (accurate for small x)
+    #[pyfunction]
+    fn log1p(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x <= -1.0 {
+            Err(vm.new_value_error("math domain error: log1p domain error".to_string()))
+        } else {
+            Ok(x.ln_1p())
+        }
+    }
+
+    /// Logarithm with arbitrary base
+    #[pyfunction]
+    fn logn(x: f64, base: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x <= 0.0 || base <= 0.0 || base == 1.0 {
+            Err(vm.new_value_error("math domain error: invalid logarithm arguments".to_string()))
+        } else {
+            Ok(x.log(base))
+        }
+    }
+
+    // ===== Trigonometric functions (radians) =====
+
+    /// Sine
+    #[pyfunction]
+    fn sin(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.sin()
+    }
+
+    /// Cosine
+    #[pyfunction]
+    fn cos(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.cos()
+    }
+
+    /// Tangent
+    #[pyfunction]
+    fn tan(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.tan()
+    }
+
+    /// Arc sine (inverse sine)
+    #[pyfunction]
+    fn asin(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x < -1.0 || x > 1.0 {
+            Err(vm.new_value_error("math domain error: asin out of range [-1, 1]".to_string()))
+        } else {
+            Ok(x.asin())
+        }
+    }
+
+    /// Arc cosine (inverse cosine)
+    #[pyfunction]
+    fn acos(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x < -1.0 || x > 1.0 {
+            Err(vm.new_value_error("math domain error: acos out of range [-1, 1]".to_string()))
+        } else {
+            Ok(x.acos())
+        }
+    }
+
+    /// Arc tangent (inverse tangent)
+    #[pyfunction]
+    fn atan(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.atan()
+    }
+
+    /// Arc tangent of y/x (quadrant-aware)
+    #[pyfunction]
+    fn atan2(y: f64, x: f64, _vm: &VirtualMachine) -> f64 {
+        y.atan2(x)
+    }
+
+    // ===== Hyperbolic functions =====
+
+    /// Hyperbolic sine
+    #[pyfunction]
+    fn sinh(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.sinh()
+    }
+
+    /// Hyperbolic cosine
+    #[pyfunction]
+    fn cosh(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.cosh()
+    }
+
+    /// Hyperbolic tangent
+    #[pyfunction]
+    fn tanh(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.tanh()
+    }
+
+    /// Inverse hyperbolic sine
+    #[pyfunction]
+    fn asinh(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.asinh()
+    }
+
+    /// Inverse hyperbolic cosine
+    #[pyfunction]
+    fn acosh(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x < 1.0 {
+            Err(vm.new_value_error("math domain error: acosh requires x >= 1".to_string()))
+        } else {
+            Ok(x.acosh())
+        }
+    }
+
+    /// Inverse hyperbolic tangent
+    #[pyfunction]
+    fn atanh(x: f64, vm: &VirtualMachine) -> PyResult<f64> {
+        if x <= -1.0 || x >= 1.0 {
+            Err(vm.new_value_error("math domain error: atanh requires -1 < x < 1".to_string()))
+        } else {
+            Ok(x.atanh())
+        }
+    }
+
+    // ===== Angular conversion =====
+
+    /// Convert radians to degrees
+    #[pyfunction]
+    fn degrees(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.to_degrees()
+    }
+
+    /// Convert degrees to radians
+    #[pyfunction]
+    fn radians(x: f64, _vm: &VirtualMachine) -> f64 {
+        x.to_radians()
+    }
+
+    // ===== Special functions =====
+
+    /// Factorial (n!)
+    #[pyfunction]
+    fn factorial(n: i64, vm: &VirtualMachine) -> PyResult<i64> {
+        if n < 0 {
+            return Err(vm.new_value_error("factorial not defined for negative numbers".to_string()));
+        }
+        if n > 20 {
+            return Err(vm.new_value_error("factorial too large (max 20)".to_string()));
+        }
+        let mut result: i64 = 1;
+        for i in 2..=n {
+            result *= i;
+        }
+        Ok(result)
+    }
+
+    /// Greatest common divisor
+    #[pyfunction]
+    fn gcd(a: i64, b: i64, _vm: &VirtualMachine) -> i64 {
+        let mut a = a.abs();
+        let mut b = b.abs();
+        while b != 0 {
+            let temp = b;
+            b = a % b;
+            a = temp;
+        }
+        a
+    }
+
+    /// Least common multiple
+    #[pyfunction]
+    fn lcm(a: i64, b: i64, vm: &VirtualMachine) -> i64 {
+        let _ = vm;
+        if a == 0 || b == 0 {
+            0
+        } else {
+            let a_abs = a.abs();
+            let b_abs = b.abs();
+            let g = {
+                let mut x = a_abs;
+                let mut y = b_abs;
+                while y != 0 {
+                    let temp = y;
+                    y = x % y;
+                    x = temp;
+                }
+                x
+            };
+            a_abs / g * b_abs
+        }
+    }
+
+    // ===== Check functions =====
+
+    /// Check if value is finite
+    #[pyfunction]
+    fn isfinite(x: f64, _vm: &VirtualMachine) -> bool {
+        x.is_finite()
+    }
+
+    /// Check if value is infinite
+    #[pyfunction]
+    fn isinf(x: f64, _vm: &VirtualMachine) -> bool {
+        x.is_infinite()
+    }
+
+    /// Check if value is NaN
+    #[pyfunction]
+    fn isnan(x: f64, _vm: &VirtualMachine) -> bool {
+        x.is_nan()
+    }
+
+    /// Check if two floats are close
+    #[pyfunction]
+    fn isclose(a: f64, b: f64, rel_tol: Option<f64>, abs_tol: Option<f64>, _vm: &VirtualMachine) -> bool {
+        let rel = rel_tol.unwrap_or(1e-9);
+        let abs = abs_tol.unwrap_or(0.0);
+        (a - b).abs() <= f64::max(rel * f64::max(a.abs(), b.abs()), abs)
+    }
+
+    // ===== Aggregation functions =====
+
+    /// Sum of a list
+    #[pyfunction]
+    fn sum(values: Vec<f64>, _vm: &VirtualMachine) -> f64 {
+        values.iter().sum()
+    }
+
+    /// Product of a list
+    #[pyfunction]
+    fn prod(values: Vec<f64>, _vm: &VirtualMachine) -> f64 {
+        values.iter().product()
+    }
+
+    /// Minimum of a list
+    #[pyfunction]
+    fn min(values: Vec<f64>, vm: &VirtualMachine) -> PyResult<f64> {
+        values.iter().cloned().reduce(f64::min)
+            .ok_or_else(|| vm.new_value_error("min of empty list".to_string()))
+    }
+
+    /// Maximum of a list
+    #[pyfunction]
+    fn max(values: Vec<f64>, vm: &VirtualMachine) -> PyResult<f64> {
+        values.iter().cloned().reduce(f64::max)
+            .ok_or_else(|| vm.new_value_error("max of empty list".to_string()))
+    }
+
+    /// Clamp value between min and max
+    #[pyfunction]
+    fn clamp(x: f64, min_val: f64, max_val: f64, _vm: &VirtualMachine) -> f64 {
+        x.max(min_val).min(max_val)
+    }
+
+    /// Linear interpolation between a and b
+    #[pyfunction]
+    fn lerp(a: f64, b: f64, t: f64, _vm: &VirtualMachine) -> f64 {
+        a + (b - a) * t
+    }
+
+    /// Map value from one range to another
+    #[pyfunction]
+    fn map_range(x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64, _vm: &VirtualMachine) -> f64 {
+        (x - in_min) / (in_max - in_min) * (out_max - out_min) + out_min
+    }
+}
+
+/// fabiscos_re - Regular expression module
+#[pymodule]
+mod fabiscos_re {
+    use rustpython_vm::{VirtualMachine, PyResult, PyObjectRef};
+    use rustpython_vm::builtins::PyDict;
+    use regex::{Regex, RegexBuilder};
+
+    /// Build regex from pattern with optional flags
+    fn build_regex(pattern: &str, flags: Option<String>, vm: &VirtualMachine) -> PyResult<Regex> {
+        let mut builder = RegexBuilder::new(pattern);
+
+        if let Some(f) = flags {
+            for c in f.chars() {
+                match c {
+                    'i' => { builder.case_insensitive(true); }
+                    'm' => { builder.multi_line(true); }
+                    's' => { builder.dot_matches_new_line(true); }
+                    'x' => { builder.ignore_whitespace(true); }
+                    _ => {}
+                }
+            }
+        }
+
+        builder.build()
+            .map_err(|e| vm.new_value_error(format!("Invalid regex: {}", e)))
+    }
+
+    /// Check if pattern matches anywhere in text
+    /// Returns True if match found, False otherwise
+    #[pyfunction]
+    fn test(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<bool> {
+        let re = build_regex(&pattern, flags, vm)?;
+        Ok(re.is_match(&text))
+    }
+
+    /// Find first match in text
+    /// Returns dict with {match, start, end, groups} or None
+    #[pyfunction]
+    fn search(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        match re.captures(&text) {
+            Some(caps) => {
+                let dict = PyDict::new_ref(&vm.ctx);
+
+                // Full match
+                if let Some(m) = caps.get(0) {
+                    let _ = dict.set_item("match", vm.ctx.new_str(m.as_str().to_string()).into(), vm);
+                    let _ = dict.set_item("start", vm.ctx.new_int(m.start() as i64).into(), vm);
+                    let _ = dict.set_item("end", vm.ctx.new_int(m.end() as i64).into(), vm);
+                }
+
+                // Capture groups (excluding full match)
+                let groups: Vec<PyObjectRef> = caps.iter()
+                    .skip(1)
+                    .map(|g| {
+                        match g {
+                            Some(m) => vm.ctx.new_str(m.as_str().to_string()).into(),
+                            None => vm.ctx.none(),
+                        }
+                    })
+                    .collect();
+                let _ = dict.set_item("groups", vm.ctx.new_list(groups).into(), vm);
+
+                Ok(dict.into())
+            }
+            None => Ok(vm.ctx.none()),
+        }
+    }
+
+    /// Find first match at the beginning of text only
+    /// Returns dict with {match, start, end, groups} or None
+    #[pyfunction]
+    fn match_start(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        // Anchor pattern at start
+        let anchored = format!("^(?:{})", pattern);
+        search(anchored, text, flags, vm)
+    }
+
+    /// Find all non-overlapping matches
+    /// Returns list of matched strings
+    #[pyfunction]
+    fn findall(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        let matches: Vec<PyObjectRef> = re.find_iter(&text)
+            .map(|m| vm.ctx.new_str(m.as_str().to_string()).into())
+            .collect();
+
+        Ok(vm.ctx.new_list(matches).into())
+    }
+
+    /// Find all matches with capture groups
+    /// Returns list of dicts with {match, start, end, groups}
+    #[pyfunction]
+    fn findall_groups(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        let mut results = vec![];
+        for caps in re.captures_iter(&text) {
+            let dict = PyDict::new_ref(&vm.ctx);
+
+            if let Some(m) = caps.get(0) {
+                let _ = dict.set_item("match", vm.ctx.new_str(m.as_str().to_string()).into(), vm);
+                let _ = dict.set_item("start", vm.ctx.new_int(m.start() as i64).into(), vm);
+                let _ = dict.set_item("end", vm.ctx.new_int(m.end() as i64).into(), vm);
+            }
+
+            let groups: Vec<PyObjectRef> = caps.iter()
+                .skip(1)
+                .map(|g| {
+                    match g {
+                        Some(m) => vm.ctx.new_str(m.as_str().to_string()).into(),
+                        None => vm.ctx.none(),
+                    }
+                })
+                .collect();
+            let _ = dict.set_item("groups", vm.ctx.new_list(groups).into(), vm);
+
+            results.push(dict.into());
+        }
+
+        Ok(vm.ctx.new_list(results).into())
+    }
+
+    /// Replace all matches with replacement string
+    /// Supports backreferences: $1, $2, etc. or ${name}
+    #[pyfunction]
+    fn sub(pattern: String, replacement: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<String> {
+        let re = build_regex(&pattern, flags, vm)?;
+        Ok(re.replace_all(&text, replacement.as_str()).to_string())
+    }
+
+    /// Replace first n matches (0 = all)
+    #[pyfunction]
+    fn subn(pattern: String, replacement: String, text: String, count: i64, flags: Option<String>, vm: &VirtualMachine) -> PyResult<(String, i64)> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        if count <= 0 {
+            let result = re.replace_all(&text, replacement.as_str()).to_string();
+            let n = re.find_iter(&text).count() as i64;
+            Ok((result, n))
+        } else {
+            let mut result = text.clone();
+            let mut replaced = 0i64;
+
+            for _ in 0..count {
+                if let Some(m) = re.find(&result) {
+                    let before = &result[..m.start()];
+                    let after = &result[m.end()..];
+                    result = format!("{}{}{}", before, replacement, after);
+                    replaced += 1;
+                } else {
+                    break;
+                }
+            }
+
+            Ok((result, replaced))
+        }
+    }
+
+    /// Split text by pattern
+    #[pyfunction]
+    fn split(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        let parts: Vec<PyObjectRef> = re.split(&text)
+            .map(|s| vm.ctx.new_str(s.to_string()).into())
+            .collect();
+
+        Ok(vm.ctx.new_list(parts).into())
+    }
+
+    /// Split text by pattern, max n splits (0 = unlimited)
+    #[pyfunction]
+    fn splitn(pattern: String, text: String, max_splits: usize, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        let parts: Vec<PyObjectRef> = if max_splits == 0 {
+            re.split(&text)
+                .map(|s| vm.ctx.new_str(s.to_string()).into())
+                .collect()
+        } else {
+            re.splitn(&text, max_splits + 1)
+                .map(|s| vm.ctx.new_str(s.to_string()).into())
+                .collect()
+        };
+
+        Ok(vm.ctx.new_list(parts).into())
+    }
+
+    /// Escape special regex characters in text
+    #[pyfunction]
+    fn escape(text: String, _vm: &VirtualMachine) -> String {
+        regex::escape(&text)
+    }
+
+    /// Count number of matches in text
+    #[pyfunction]
+    fn count(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<i64> {
+        let re = build_regex(&pattern, flags, vm)?;
+        Ok(re.find_iter(&text).count() as i64)
+    }
+
+    /// Get positions of all matches
+    /// Returns list of (start, end) tuples
+    #[pyfunction]
+    fn finditer(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        let positions: Vec<PyObjectRef> = re.find_iter(&text)
+            .map(|m| {
+                let tuple = vec![
+                    vm.ctx.new_int(m.start() as i64).into(),
+                    vm.ctx.new_int(m.end() as i64).into(),
+                ];
+                vm.ctx.new_tuple(tuple).into()
+            })
+            .collect();
+
+        Ok(vm.ctx.new_list(positions).into())
+    }
+
+    /// Check if pattern matches the entire text
+    #[pyfunction]
+    fn fullmatch(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<bool> {
+        // Anchor pattern at both ends
+        let anchored = format!("^(?:{})$", pattern);
+        let re = build_regex(&anchored, flags, vm)?;
+        Ok(re.is_match(&text))
+    }
+
+    /// Extract named groups from match
+    /// Pattern must use (?P<name>...) syntax
+    /// Returns dict with group names as keys
+    #[pyfunction]
+    fn search_named(pattern: String, text: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        match re.captures(&text) {
+            Some(caps) => {
+                let dict = PyDict::new_ref(&vm.ctx);
+
+                // Add full match info
+                if let Some(m) = caps.get(0) {
+                    let _ = dict.set_item("_match", vm.ctx.new_str(m.as_str().to_string()).into(), vm);
+                    let _ = dict.set_item("_start", vm.ctx.new_int(m.start() as i64).into(), vm);
+                    let _ = dict.set_item("_end", vm.ctx.new_int(m.end() as i64).into(), vm);
+                }
+
+                // Add named groups
+                for name in re.capture_names().flatten() {
+                    if let Some(m) = caps.name(name) {
+                        let _ = dict.set_item(name, vm.ctx.new_str(m.as_str().to_string()).into(), vm);
+                    } else {
+                        let _ = dict.set_item(name, vm.ctx.none(), vm);
+                    }
+                }
+
+                Ok(dict.into())
+            }
+            None => Ok(vm.ctx.none()),
+        }
+    }
+
+    /// Get list of capture group names in pattern
+    #[pyfunction]
+    fn group_names(pattern: String, flags: Option<String>, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
+        let re = build_regex(&pattern, flags, vm)?;
+
+        let names: Vec<PyObjectRef> = re.capture_names()
+            .filter_map(|n| n.map(|s| vm.ctx.new_str(s.to_string()).into()))
+            .collect();
+
+        Ok(vm.ctx.new_list(names).into())
+    }
+
+    /// Validate regex pattern without executing
+    /// Returns None if valid, error message if invalid
+    #[pyfunction]
+    fn validate(pattern: String, flags: Option<String>, _vm: &VirtualMachine) -> Option<String> {
+        let mut builder = RegexBuilder::new(&pattern);
+
+        if let Some(f) = flags {
+            for c in f.chars() {
+                match c {
+                    'i' => { builder.case_insensitive(true); }
+                    'm' => { builder.multi_line(true); }
+                    's' => { builder.dot_matches_new_line(true); }
+                    'x' => { builder.ignore_whitespace(true); }
+                    _ => {}
+                }
+            }
+        }
+
+        match builder.build() {
+            Ok(_) => None,
+            Err(e) => Some(format!("{}", e)),
+        }
     }
 }
 

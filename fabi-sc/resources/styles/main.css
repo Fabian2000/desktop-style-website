@@ -2309,6 +2309,7 @@
 }
 
 .recents-card-preview {
+  position: relative;
   height: 150px;
   display: flex;
   align-items: center;
@@ -2322,13 +2323,21 @@
     height: 120px;
   }
 }
+.recents-card-preview .preview-fallback {
+  position: relative;
+  z-index: 0;
+}
 .recents-card-preview .preview-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   -o-object-fit: cover;
      object-fit: cover;
   -o-object-position: top left;
      object-position: top left;
+  z-index: 1;
 }
 
 .display-none {

@@ -27,6 +27,7 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 web-sys = { version = "0.3.77", features = [
   "Window", "Document", "Element", "Node", "Event", "EventTarget",
   "HtmlElement", "HtmlInputElement", "HtmlCanvasElement", "HtmlCollection",
+  "HtmlImageElement", "CssStyleDeclaration",
   "CanvasRenderingContext2d", "MouseEvent", "KeyboardEvent", "Performance",
   "console", "DomTokenList",
   "IdbDatabase", "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction",
@@ -47,6 +48,7 @@ cbc = { version = "0.1.2", default-features = false, features = ["alloc", "block
 csv = "1.4.0"
 zip = { version = "6.0.0", features = ["deflate"] }
 rand = { version = "0.9.2", features = ["std_rng"] }
+regex = "1.11"
 
 [build-dependencies]
 chrono = "0.4.41"

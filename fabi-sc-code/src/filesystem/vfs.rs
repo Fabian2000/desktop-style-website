@@ -581,6 +581,12 @@ pub async fn rename(from: &str, to: &str) -> Result<(), VfsError> {
         return Err(VfsError::InvalidPath(err));
     }
 
+    // Explicitly validate the new filename
+    let new_name = path::file_name(&to_normalized).unwrap_or_default();
+    if let Some(err) = path::validate_name(&new_name) {
+        return Err(VfsError::InvalidPath(format!("Invalid filename: {}", err)));
+    }
+
     // Check if source is protected
     if path::is_protected(&from_normalized) {
         return Err(VfsError::PermissionDenied(format!(
@@ -690,6 +696,12 @@ pub async fn copy(from: &str, to: &str) -> Result<(), VfsError> {
     // Validate target path format and characters
     if let Some(err) = path::validate_path(&to_normalized) {
         return Err(VfsError::InvalidPath(err));
+    }
+
+    // Explicitly validate the new filename
+    let new_name = path::file_name(&to_normalized).unwrap_or_default();
+    if let Some(err) = path::validate_name(&new_name) {
+        return Err(VfsError::InvalidPath(format!("Invalid filename: {}", err)));
     }
 
     // Check if target is in protected area

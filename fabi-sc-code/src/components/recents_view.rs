@@ -1,7 +1,7 @@
 //! Recents/App Switcher View
 //!
 //! Shows all open apps as cards that can be swiped away to close.
-//! On desktop, shows real window previews using html2canvas.
+//! Shows real window previews using html2canvas on all devices.
 
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -45,49 +45,60 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
     let swipe_offset = use_state(|| 0i32);
     let swipe_start_x = use_state(|| 0i32);
 
-    // Preview images state (desktop only) - use Rc<RefCell> to persist across renders
+    // Preview images state - shows cached first, then updates with fresh capture
     let previews = use_state(HashMap::<String, String>::new);
 
-    // Track which windows we've already captured to avoid re-capturing
-    let captured_ids = use_state(Vec::<String>::new);
-
-    // Capture previews when recents view opens (desktop only)
-    // Only capture windows we haven't captured yet
+    // Capture previews when recents view opens
+    // Strategy: Load cached previews instantly, then re-capture fresh ones in background
     {
         let previews = previews.clone();
-        let captured_ids = captured_ids.clone();
         let apps = props.apps.clone();
         let visible = props.visible;
         use_effect_with(visible, move |visible| {
-            if *visible && is_desktop() {
+            if *visible {
                 let previews = previews.clone();
-                let captured_ids = captured_ids.clone();
-                let already_captured: Vec<String> = (*captured_ids).clone();
                 spawn_local(async move {
-                    let mut new_previews = (*previews).clone();
-                    let mut new_captured = already_captured.clone();
-
-                    for app in &apps {
-                        let window_id = app.window_id.clone();
-
-                        // Skip if already captured
-                        if already_captured.contains(&window_id) {
-                            continue;
+                    // First: Load cached previews for instant display
+                    let mut cached_previews = HashMap::new();
+                    if let Ok(previews_obj) = js_sys::Reflect::get(
+                        &web_sys::window().unwrap(),
+                        &JsValue::from_str("__windowPreviews")
+                    ) {
+                        if let Ok(get_fn) = js_sys::Reflect::get(&previews_obj, &JsValue::from_str("get")) {
+                            if let Some(func) = get_fn.dyn_ref::<js_sys::Function>() {
+                                for app in &apps {
+                                    if let Ok(result) = func.call1(&previews_obj, &JsValue::from_str(&app.window_id)) {
+                                        if let Some(url) = result.as_string() {
+                                            cached_previews.insert(app.window_id.clone(), url);
+                                        }
+                                    }
+                                }
+                            }
                         }
+                    }
 
-                        // Try to capture preview
-                        if let Ok(previews_obj) = js_sys::Reflect::get(
-                            &web_sys::window().unwrap(),
-                            &JsValue::from_str("__windowPreviews")
-                        ) {
-                            if let Ok(capture_fn) = js_sys::Reflect::get(&previews_obj, &JsValue::from_str("capture")) {
-                                if let Some(func) = capture_fn.dyn_ref::<js_sys::Function>() {
+                    // Show cached previews immediately
+                    if !cached_previews.is_empty() {
+                        previews.set(cached_previews.clone());
+                    }
+
+                    // Then: Re-capture fresh previews in background
+                    let mut fresh_previews = cached_previews;
+                    if let Ok(previews_obj) = js_sys::Reflect::get(
+                        &web_sys::window().unwrap(),
+                        &JsValue::from_str("__windowPreviews")
+                    ) {
+                        if let Ok(capture_fn) = js_sys::Reflect::get(&previews_obj, &JsValue::from_str("capture")) {
+                            if let Some(func) = capture_fn.dyn_ref::<js_sys::Function>() {
+                                for app in &apps {
+                                    let window_id = app.window_id.clone();
                                     if let Ok(result) = func.call1(&previews_obj, &JsValue::from_str(&window_id)) {
                                         if let Ok(promise) = result.dyn_into::<js_sys::Promise>() {
                                             if let Ok(data_url) = wasm_bindgen_futures::JsFuture::from(promise).await {
                                                 if let Some(url) = data_url.as_string() {
-                                                    new_previews.insert(window_id.clone(), url);
-                                                    new_captured.push(window_id);
+                                                    fresh_previews.insert(window_id.clone(), url);
+                                                    // Update preview as soon as each one is ready
+                                                    previews.set(fresh_previews.clone());
                                                 }
                                             }
                                         }
@@ -96,9 +107,6 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
                             }
                         }
                     }
-
-                    previews.set(new_previews);
-                    captured_ids.set(new_captured);
                 });
             }
             || ()
@@ -284,12 +292,8 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
                                 "display: none;".to_string()
                             };
 
-                            // Get preview image for this window (desktop only)
-                            let preview_image = if is_desktop_view {
-                                previews.get(&window_id).cloned()
-                            } else {
-                                None
-                            };
+                            // Get preview image for this window
+                            let preview_image = previews.get(&window_id).cloned();
 
                             html! {
                                 <div class="recents-card-wrapper">

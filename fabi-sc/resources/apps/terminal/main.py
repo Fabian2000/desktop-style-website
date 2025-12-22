@@ -242,14 +242,21 @@ class Shell:
         if not p.startswith("/"):
             p = f"{self.cwd}/{p}"
 
-        # Normalize path
+        # Normalize path - SECURITY: Cannot go above /home
         parts_list = []
         for part in p.split("/"):
             if part == "..":
-                if parts_list:
+                # Only pop if we have more than just "home"
+                # This ensures we can never go above /home
+                if len(parts_list) > 1:
                     parts_list.pop()
+                # If parts_list is ["home"] or empty, do nothing
             elif part and part != ".":
                 parts_list.append(part)
+
+        # Ensure path always starts with /home
+        if not parts_list or parts_list[0] != "home":
+            return "/home"
         return "/" + "/".join(parts_list)
 
     def expand_variables(self, text):

@@ -95,6 +95,9 @@ pub fn file_stem(path: &str) -> Option<String> {
 }
 
 /// Normalize a path (resolve . and .., remove duplicate slashes)
+/// SECURITY: All paths are contained within /home - cannot escape above it
+/// Paths that don't start with /home are returned as-is (after basic normalization)
+/// so that is_valid() can properly reject them
 pub fn normalize(path: &str) -> String {
     let mut parts: Vec<&str> = Vec::new();
 
@@ -102,8 +105,18 @@ pub fn normalize(path: &str) -> String {
         match part {
             "" | "." => continue,
             ".." => {
-                // Don't go above /home
-                if parts.len() > 1 || (parts.len() == 1 && parts[0] != "home") {
+                // SECURITY: Only pop if we have more than just "home"
+                // This ensures we can never go above /home
+                // When parts = ["home"], we stay at /home
+                // When parts = ["home", "Documents"], we can go back to ["home"]
+                if parts.len() > 1 {
+                    parts.pop();
+                } else if parts.len() == 1 && parts[0] == "home" {
+                    // At /home, .. does nothing - stay at /home
+                    // This is the key security fix
+                } else if !parts.is_empty() {
+                    // For non-/home paths (like /etc/..), allow normal behavior
+                    // These will be rejected by is_valid() anyway
                     parts.pop();
                 }
             }
@@ -111,7 +124,9 @@ pub fn normalize(path: &str) -> String {
         }
     }
 
+    // Return normalized path
     if parts.is_empty() {
+        // Empty path (like "/" or "") defaults to /home
         "/home".to_string()
     } else {
         format!("/{}", parts.join("/"))
@@ -404,6 +419,11 @@ mod tests {
         assert_eq!(normalize("/home/./Documents"), "/home/Documents");
         assert_eq!(normalize("/home//Documents///file.txt"), "/home/Documents/file.txt");
         assert_eq!(normalize("/home/../../../"), "/home");
+        // SECURITY: Paths with .. that try to escape /home must stay within /home
+        assert_eq!(normalize("/home/.system/../../.."), "/home");
+        assert_eq!(normalize("/home/a/b/c/../../../.."), "/home");
+        assert_eq!(normalize("/home/Documents/.."), "/home");
+        assert_eq!(normalize("/home/.."), "/home");
     }
 
     #[test]

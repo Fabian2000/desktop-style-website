@@ -717,7 +717,7 @@ pub fn app() -> Html {
                 }
             })}
             <Taskbar
-                visible={show_desktop && !is_offline && !is_booting && !is_shutting_down && !is_restarting}
+                visible={show_desktop && !is_offline && !is_booting && !is_shutting_down && !is_restarting && !*show_recents}
                 active_app={active_app_id}
                 open_apps={windows_list.iter().map(|w| w.app_id.clone()).collect::<Vec<_>>()}
                 on_app_click={on_app_click}

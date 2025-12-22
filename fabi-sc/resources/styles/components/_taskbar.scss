@@ -451,6 +451,39 @@
         user-select: none;
     }
 
+    // Swipe-up hint animation (shown after unlock)
+    .swipe-hint {
+        position: absolute;
+        bottom: 70px; // Start on the dock (above icons)
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba($color-text, 0.8);
+        font-size: 32px;
+        pointer-events: none;
+        animation: swipe-hint-animation 4s ease-out forwards;
+
+        i {
+            display: block;
+            transform: rotate(-45deg); // Point finger upward
+        }
+    }
+
+    @keyframes swipe-hint-animation {
+        // First swipe (start on dock, swipe up)
+        0% { opacity: 0; transform: translateX(-50%) translateY(0); }
+        5% { opacity: 1; transform: translateX(-50%) translateY(0); }
+        20% { opacity: 1; transform: translateX(-50%) translateY(-80px); }
+        25% { opacity: 0; transform: translateX(-50%) translateY(-80px); }
+        // Pause and reset position
+        45% { opacity: 0; transform: translateX(-50%) translateY(0); }
+        // Second swipe
+        50% { opacity: 1; transform: translateX(-50%) translateY(0); }
+        65% { opacity: 1; transform: translateX(-50%) translateY(-80px); }
+        70% { opacity: 0; transform: translateX(-50%) translateY(-80px); }
+        // Stay hidden
+        100% { opacity: 0; transform: translateX(-50%) translateY(-80px); }
+    }
+
     // Drag handle indicator
     .dock-handle {
         width: 40px;

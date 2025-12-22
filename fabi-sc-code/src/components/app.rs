@@ -95,6 +95,7 @@ pub fn app() -> Html {
     let next_z_index = use_state(|| 100u32);
     let active_window = use_state(|| Option::<String>::None);
     let show_recents = use_state(|| false);
+    let show_swipe_hint = use_state(|| false);
 
     // Initialize filesystem, session management, and poll for boot complete signal
     {
@@ -223,8 +224,18 @@ pub fn app() -> Html {
 
     let on_login = {
         let app_state = app_state.clone();
+        let show_swipe_hint = show_swipe_hint.clone();
         Callback::from(move |_| {
             app_state.set(AppState::Desktop);
+            // Show swipe hint on mobile after unlock
+            show_swipe_hint.set(true);
+        })
+    };
+
+    let on_swipe_hint_done = {
+        let show_swipe_hint = show_swipe_hint.clone();
+        Callback::from(move |_| {
+            show_swipe_hint.set(false);
         })
     };
 
@@ -723,6 +734,8 @@ pub fn app() -> Html {
                 on_app_click={on_app_click}
                 on_power_action={on_power_action}
                 on_show_recents={on_show_recents.clone()}
+                show_swipe_hint={*show_swipe_hint}
+                on_swipe_hint_done={on_swipe_hint_done}
             />
             // Recents/App Switcher View
             <RecentsView

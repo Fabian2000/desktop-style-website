@@ -1,4 +1,5 @@
 use base64::Engine;
+use gloo_timers::callback::Timeout;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -75,6 +76,10 @@ pub struct TaskbarProps {
     pub on_power_action: Callback<PowerAction>,  // Emits shutdown/restart actions
     #[prop_or_default]
     pub on_show_recents: Callback<()>,  // Open desktop recents view
+    #[prop_or_default]
+    pub show_swipe_hint: bool,  // Show swipe-up hint animation after unlock
+    #[prop_or_default]
+    pub on_swipe_hint_done: Callback<()>,  // Called when hint animation completes
 }
 
 /// Maximum apps to show in taskbar (reduced by 1 for recents button)
@@ -396,6 +401,22 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     );
                 }
             }
+        });
+    }
+
+    // Swipe hint timer - triggers callback after animation completes (~4s)
+    {
+        let on_swipe_hint_done = props.on_swipe_hint_done.clone();
+        let show_swipe_hint = props.show_swipe_hint;
+        use_effect_with(show_swipe_hint, move |show| {
+            if *show {
+                // Animation duration: 2x (fade-in + swipe + fade-out) = ~4 seconds
+                let timeout = Timeout::new(4000, move || {
+                    on_swipe_hint_done.emit(());
+                });
+                timeout.forget(); // Let it run
+            }
+            || ()
         });
     }
 
@@ -897,6 +918,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 ontouchmove={on_dock_touch_move}
                 ontouchend={on_dock_touch_end}
             >
+                // Swipe-up hint animation (shown after unlock)
+                if props.show_swipe_hint {
+                    <div class="swipe-hint">
+                        <i class="fa-solid fa-hand-pointer"></i>
+                    </div>
+                }
                 <div class="dock-handle"></div>
                 <div class="dock-icons">
                     { for mobile_dock_apps.iter().map(|app| {

@@ -1384,8 +1384,8 @@
 @media screen and (orientation: portrait) {
   .mobile-dock {
     display: flex;
-    justify-content: center;
-    gap: 24px;
+    flex-direction: column;
+    align-items: center;
     position: fixed;
     bottom: 0;
     left: 0;
@@ -1397,6 +1397,18 @@
        -moz-user-select: none;
             user-select: none;
   }
+}
+.mobile-dock .dock-handle {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  margin-bottom: 12px;
+}
+.mobile-dock .dock-icons {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
 }
 .mobile-dock .dock-item {
   display: flex;

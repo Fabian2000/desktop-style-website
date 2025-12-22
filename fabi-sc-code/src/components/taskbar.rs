@@ -897,22 +897,25 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 ontouchmove={on_dock_touch_move}
                 ontouchend={on_dock_touch_end}
             >
-                { for mobile_dock_apps.iter().map(|app| {
-                    let app_id = app.id.clone();
-                    let on_click = {
-                        let on_app_click = props.on_app_click.clone();
-                        let app_id = app_id.clone();
-                        Callback::from(move |_| {
-                            on_app_click.emit((app_id.clone(), vec![]));
-                        })
-                    };
+                <div class="dock-handle"></div>
+                <div class="dock-icons">
+                    { for mobile_dock_apps.iter().map(|app| {
+                        let app_id = app.id.clone();
+                        let on_click = {
+                            let on_app_click = props.on_app_click.clone();
+                            let app_id = app_id.clone();
+                            Callback::from(move |_| {
+                                on_app_click.emit((app_id.clone(), vec![]));
+                            })
+                        };
 
-                    html! {
-                        <button class="dock-item" onclick={on_click}>
-                            { render_icon(&app.icon, "") }
-                        </button>
-                    }
-                })}
+                        html! {
+                            <button class="dock-item" onclick={on_click}>
+                                { render_icon(&app.icon, "") }
+                            </button>
+                        }
+                    })}
+                </div>
             </div>
 
             // Mobile: App Drawer

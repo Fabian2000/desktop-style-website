@@ -439,8 +439,8 @@
 
     @media screen and (orientation: portrait) {
         display: flex;
-        justify-content: center;
-        gap: 24px;
+        flex-direction: column;
+        align-items: center;
         position: fixed;
         bottom: 0;
         left: 0;
@@ -449,6 +449,21 @@
         padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
         z-index: 98; // Below app-drawer (z-index: 99)
         user-select: none;
+    }
+
+    // Drag handle indicator
+    .dock-handle {
+        width: 40px;
+        height: 4px;
+        background: rgba($color-text, 0.3);
+        border-radius: 2px;
+        margin-bottom: 12px;
+    }
+
+    .dock-icons {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
     }
 
     .dock-item {

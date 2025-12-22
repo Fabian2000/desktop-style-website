@@ -84,15 +84,48 @@ class Shell:
             except:
                 self.cwd = "/home"
 
-        # Environment variables
-        self.env = {
-            "USER": "user",
-            "HOME": "/home",
-            "PATH": "/bin:/usr/bin",
-            "SHELL": "/bin/bash",
-            "PWD": self.cwd,
-            "HOSTNAME": "fabiscos"
-        }
+        # Environment variables - load from state or use defaults
+        _saved_env = state.get("env_vars")
+        if _saved_env and isinstance(_saved_env, str):
+            try:
+                self.env = {}
+                for line in _saved_env.split("\n"):
+                    if "=" in line:
+                        # Find first unescaped =
+                        idx = 0
+                        while idx < len(line):
+                            if line[idx] == "\\" and idx + 1 < len(line):
+                                idx += 2  # Skip escaped char
+                            elif line[idx] == "=":
+                                break
+                            else:
+                                idx += 1
+                        if idx < len(line):
+                            k = line[:idx]
+                            v = line[idx + 1:]
+                            # Unescape value
+                            v = v.replace("\\=", "=").replace("\\n", "\n").replace("\\\\", "\\")
+                            self.env[k] = v
+                # Ensure PWD is always current
+                self.env["PWD"] = self.cwd
+            except:
+                self.env = {
+                    "USER": "fabi-sc",
+                    "HOME": "/home",
+                    "PATH": "/home/.system/apps",
+                    "SHELL": "/home/.system/apps/terminal",
+                    "PWD": self.cwd,
+                    "HOSTNAME": "fabiscos"
+                }
+        else:
+            self.env = {
+                "USER": "fabi-sc",
+                "HOME": "/home",
+                "PATH": "/home/.system/apps",
+                "SHELL": "/home/.system/apps/terminal",
+                "PWD": self.cwd,
+                "HOSTNAME": "fabiscos"
+            }
 
         # Command history
         _history = state.get_list("history")
@@ -210,9 +243,6 @@ class Shell:
         # Sudo
         self.register("sudo", cmd_sudo, "Execute as superuser")
 
-        # Debug
-        self.register("debug-aliases", cmd_debug_aliases, "Debug: show loaded aliases")
-
     def register(self, name, func, description=""):
         """Register a command - makes extending easy"""
         self.commands[name] = {"func": func, "desc": description}
@@ -241,6 +271,13 @@ class Shell:
                 escaped_v = v.replace("\\", "\\\\").replace("\n", "\\n").replace("=", "\\=")
                 alias_lines.append(f"{k}={escaped_v}")
             state.set("aliases_v2", "\n".join(alias_lines))
+            # Environment variables: serialize like aliases
+            env_lines = []
+            for k, v in self.env.items():
+                # Escape newlines and equals in values
+                escaped_v = v.replace("\\", "\\\\").replace("\n", "\\n").replace("=", "\\=")
+                env_lines.append(f"{k}={escaped_v}")
+            state.set("env_vars", "\n".join(env_lines))
         except Exception as e:
             # Silently fail - don't break terminal on state save errors
             pass
@@ -299,10 +336,6 @@ class Shell:
             expanded = self.aliases[parts[0]] + " " + " ".join(parts[1:])
             return expanded.strip()
         return cmd
-
-    def debug_aliases(self):
-        """Debug: show current aliases"""
-        return str(self.aliases)
 
     def parse_command(self, cmd_line):
         """Parse command line into command and args, handling quotes"""
@@ -1345,21 +1378,6 @@ def cmd_sudo(shell, args):
     shell.sudo_attempts = 0
     shell.input_mode = "password"
 
-    return 0
-
-def cmd_debug_aliases(shell, args):
-    """Debug: show loaded aliases and state"""
-    shell.output("=== Current aliases in memory ===")
-    shell.output(str(shell.aliases))
-    shell.output("")
-    shell.output("=== Aliases in state (aliases_v2) ===")
-    saved = state.get("aliases_v2")
-    shell.output(f"Raw: {saved}")
-    shell.output("")
-    shell.output("=== Testing state.set() ===")
-    state.set("test_key", "test_value")
-    result = state.get("test_key")
-    shell.output(f"Set 'test_key' to 'test_value', got back: {result}")
     return 0
 
 # ============================================================================

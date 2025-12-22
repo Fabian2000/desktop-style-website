@@ -654,7 +654,7 @@ pub fn app() -> Html {
     // This way when boot completes, everything is already rendered and ready
     html! {
         <>
-            <TopBar visible={show_desktop && !is_offline && !is_booting} on_disconnect={on_disconnect.clone()} />
+            <TopBar visible={show_desktop && !is_offline && !is_booting} on_disconnect={on_disconnect.clone()} on_power_action={on_power_action.clone()} />
             <Workspace visible={show_desktop && !is_offline && !is_booting} />
             // Windows rendered OUTSIDE workspace so they have their own stacking context
             // This allows mobile windows to appear above the mobile-dock

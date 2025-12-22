@@ -23,10 +23,12 @@
 }
 
 // Disable text selection and drag by default (it's an app, not a document)
+// Also disable browser touch highlights (blue squares on mobile)
 * {
     user-select: none;
     -webkit-user-select: none;
     -webkit-user-drag: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 // Explicitly disable image dragging

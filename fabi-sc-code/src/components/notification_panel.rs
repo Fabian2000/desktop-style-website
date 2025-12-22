@@ -1,3 +1,4 @@
+use crate::components::taskbar::PowerAction;
 use crate::database::IndexedDb;
 use gloo_timers::callback::Interval;
 use js_sys::Date;
@@ -13,6 +14,7 @@ pub struct NotificationPanelProps {
     pub drag_offset: f32,
     pub is_dragging: bool,
     pub on_disconnect: Callback<()>,
+    pub on_power_action: Callback<PowerAction>,
 }
 
 #[function_component(NotificationPanel)]
@@ -23,6 +25,7 @@ pub fn notification_panel(props: &NotificationPanelProps) -> Html {
     let volume_display = use_state(|| String::from("0 %"));
     let brightness = use_state(|| 100i32);
     let brightness_display = use_state(|| String::from("100 %"));
+    let power_popup_open = use_state(|| false);
 
     // Initialize volume and brightness from IndexedDB
     {
@@ -142,6 +145,38 @@ pub fn notification_panel(props: &NotificationPanelProps) -> Html {
         })
     };
 
+    let on_power_btn_click = {
+        let power_popup_open = power_popup_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            power_popup_open.set(true);
+        })
+    };
+
+    let on_power_popup_close = {
+        let power_popup_open = power_popup_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            power_popup_open.set(false);
+        })
+    };
+
+    let on_shutdown = {
+        let on_power_action = props.on_power_action.clone();
+        let power_popup_open = power_popup_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            power_popup_open.set(false);
+            on_power_action.emit(PowerAction::Shutdown);
+        })
+    };
+
+    let on_restart = {
+        let on_power_action = props.on_power_action.clone();
+        let power_popup_open = power_popup_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            power_popup_open.set(false);
+            on_power_action.emit(PowerAction::Restart);
+        })
+    };
+
     if !props.visible {
         return html! {};
     }
@@ -174,6 +209,11 @@ pub fn notification_panel(props: &NotificationPanelProps) -> Html {
 
     html! {
         <div class={panel_class} style={transform_style}>
+            // Power button in top-right corner
+            <button class="notification-power-btn" onclick={on_power_btn_click}>
+                <i class="fa-solid fa-power-off"></i>
+            </button>
+
             <div class="notification-panel-content">
                 <div class="notification-time-section">
                     <div class="notification-large-time">{(*current_time).clone()}</div>
@@ -239,6 +279,25 @@ pub fn notification_panel(props: &NotificationPanelProps) -> Html {
                 </div>
 
             </div>
+
+            // Power popup (centered)
+            if *power_popup_open {
+                <div class="power-popup-backdrop" onclick={on_power_popup_close}>
+                    <div class="power-popup" onclick={Callback::from(|e: MouseEvent| e.stop_propagation())}>
+                        <div class="power-popup-title">{"Power"}</div>
+                        <div class="power-popup-options">
+                            <button class="power-popup-btn" onclick={on_restart}>
+                                <i class="fa-solid fa-rotate-right"></i>
+                                <span>{"Restart"}</span>
+                            </button>
+                            <button class="power-popup-btn shutdown" onclick={on_shutdown}>
+                                <i class="fa-solid fa-power-off"></i>
+                                <span>{"Shut Down"}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     }
 }

@@ -1,5 +1,6 @@
 use super::calendar_popup::CalendarPopup;
 use super::notification_panel::NotificationPanel;
+use super::taskbar::PowerAction;
 use crate::database::IndexedDb;
 use crate::utils::get_local_time_no_sec;
 use gloo_timers::callback::{Interval, Timeout};
@@ -21,6 +22,7 @@ fn is_portrait() -> bool {
 pub struct TopBarProps {
     pub visible: bool,
     pub on_disconnect: Callback<()>,
+    pub on_power_action: Callback<PowerAction>,
 }
 
 #[function_component(TopBar)]
@@ -422,6 +424,15 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                     return;
                 }
 
+                // Don't intercept if power popup is open
+                let power_popup_open = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(".power-popup-backdrop").ok().flatten())
+                    .is_some();
+                if power_popup_open {
+                    return;
+                }
+
                 // Check if panel is open by looking at the DOM
                 // Panel has .open class when open and not dragging, or check if it's visible at all
                 let panel_is_open = web_sys::window()
@@ -752,6 +763,7 @@ pub fn top_bar(props: &TopBarProps) -> Html {
                 drag_offset={*panel_drag_offset}
                 is_dragging={*panel_dragging}
                 on_disconnect={props.on_disconnect.clone()}
+                on_power_action={props.on_power_action.clone()}
             />
         </>
     }

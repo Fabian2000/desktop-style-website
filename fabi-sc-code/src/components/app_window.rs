@@ -52,6 +52,18 @@ pub struct AppWindowProps {
     pub height: u32,
     #[prop_or(100)]
     pub z_index: u32,
+    /// Minimum width constraint (default 200)
+    #[prop_or(200)]
+    pub min_width: u32,
+    /// Minimum height constraint (default 150)
+    #[prop_or(150)]
+    pub min_height: u32,
+    /// Maximum width constraint (0 = unlimited)
+    #[prop_or(0)]
+    pub max_width: u32,
+    /// Maximum height constraint (0 = unlimited, ignored on mobile)
+    #[prop_or(0)]
+    pub max_height: u32,
     /// Python code to execute (loaded from VFS)
     #[prop_or_default]
     pub python_code: Option<String>,
@@ -681,6 +693,11 @@ if '__change_handler__' in dir() and __change_handler__:
         let position = position.clone();
         let size = size.clone();
         let drag_offset = drag_offset.clone();
+        // Capture min/max constraints from props
+        let min_w = props.min_width;
+        let min_h = props.min_height;
+        let max_w = props.max_width;
+        let max_h = props.max_height;
 
         use_effect_with(
             (*dragging, *resizing),
@@ -724,10 +741,20 @@ if '__change_handler__' in dir() and __change_handler__:
                                 let new_y = (e.client_y() - offset_y).max(min_y).min(max_y);
                                 position_clone.set((new_x, new_y));
                             } else {
-                                // Resizing
+                                // Resizing - apply min/max constraints (desktop only)
                                 let (current_x, current_y) = *position_clone;
-                                let new_width = ((e.client_x() - current_x) as u32).max(300);
-                                let new_height = ((e.client_y() - current_y) as u32).max(200);
+                                // Prevent negative values by clamping to minimum before cast
+                                let raw_width = e.client_x() - current_x;
+                                let raw_height = e.client_y() - current_y;
+                                let mut new_width = if raw_width < 0 { min_w } else { (raw_width as u32).max(min_w) };
+                                let mut new_height = if raw_height < 0 { min_h } else { (raw_height as u32).max(min_h) };
+                                // Apply max constraints (0 = unlimited)
+                                if max_w > 0 {
+                                    new_width = new_width.min(max_w);
+                                }
+                                if max_h > 0 {
+                                    new_height = new_height.min(max_h);
+                                }
                                 size_clone.set((new_width, new_height));
                             }
                         }) as Box<dyn FnMut(_)>);
@@ -906,6 +933,8 @@ if '__change_handler__' in dir() and __change_handler__:
     let is_mobile_view = is_mobile();
     let is_maximized = *window_state == WindowState::Maximized;
     let is_minimized = *window_state == WindowState::Minimized;
+    // Hide maximize button if max_width or max_height is set (0 = unlimited)
+    let can_maximize = props.max_width == 0 && props.max_height == 0;
 
     // Window class
     let mut window_classes = vec!["app-window"];
@@ -1006,18 +1035,21 @@ if '__change_handler__' in dir() and __change_handler__:
                         >
                             <i class="fa-solid fa-minus"></i>
                         </button>
-                        <button
-                            class="window-btn maximize"
-                            onclick={on_maximize_click}
-                            onmousedown={stop_drag_propagation.clone()}
-                            title={if is_maximized { "Wiederherstellen" } else { "Maximieren" }}
-                        >
-                            if is_maximized {
-                                <i class="fa-regular fa-window-restore"></i>
-                            } else {
-                                <i class="fa-regular fa-square"></i>
-                            }
-                        </button>
+                        // Only show maximize button if no max constraints are set
+                        if can_maximize {
+                            <button
+                                class="window-btn maximize"
+                                onclick={on_maximize_click}
+                                onmousedown={stop_drag_propagation.clone()}
+                                title={if is_maximized { "Wiederherstellen" } else { "Maximieren" }}
+                            >
+                                if is_maximized {
+                                    <i class="fa-regular fa-window-restore"></i>
+                                } else {
+                                    <i class="fa-regular fa-square"></i>
+                                }
+                            </button>
+                        }
                         <button
                             class="window-btn close"
                             onclick={on_close_click.clone()}

@@ -214,10 +214,10 @@ async fn sync_system_files() -> Result<SyncResult, VfsError> {
             // Fetch file from server
             match fetch_file(&file.server_path).await {
                 Ok(content) => {
-                    // Ensure parent directory exists
+                    // Ensure parent directory exists (use force to bypass .system protection)
                     if let Some(parent) = path::parent(&normalized_path) {
                         if !vfs::exists(&parent).await? {
-                            vfs::create_dir_all(&parent).await?;
+                            vfs::create_dir_all_force(&parent).await?;
                         }
                     }
 

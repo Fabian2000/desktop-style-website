@@ -7,6 +7,8 @@
         <link rel="icon" type="image/png" href="/resources/img/logo_inverted_bg.webp">
         <link rel="stylesheet" href="/resources/styles/main.css">
         <link rel="stylesheet" href="/resources/extern/fontawesome-free-7.0.0-web/css/all.min.css">
+        <!-- html2canvas for window previews -->
+        <script src="/resources/extern/html2canvas.min.js" defer></script>
         <noscript>
             <style>
                 .boot-animation {
@@ -39,6 +41,62 @@
 
             // Boot screen will be hidden after WASM loads + 3 seconds
             window.__bootComplete = false;
+
+            // ================================================================
+            // Window Preview Capture - Uses html2canvas for recents view
+            // ================================================================
+            window.__windowPreviews = {
+                _cache: new Map(),  // windowId -> base64 image
+                _pending: new Set(), // windowIds currently being captured
+
+                // Capture a window's content as base64 image
+                async capture(windowId) {
+                    if (this._pending.has(windowId)) return this._cache.get(windowId);
+
+                    const windowEl = document.querySelector(`[data-window-id="${windowId}"] .window-content`);
+                    if (!windowEl || typeof html2canvas !== 'function') {
+                        return null;
+                    }
+
+                    this._pending.add(windowId);
+                    try {
+                        const canvas = await html2canvas(windowEl, {
+                            scale: 0.5,  // Lower resolution for performance
+                            logging: false,
+                            useCORS: true,
+                            allowTaint: true,
+                            backgroundColor: '#1a1a1a'
+                        });
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                        this._cache.set(windowId, dataUrl);
+                        return dataUrl;
+                    } catch (e) {
+                        console.warn('[Preview] Failed to capture window:', windowId, e);
+                        return null;
+                    } finally {
+                        this._pending.delete(windowId);
+                    }
+                },
+
+                // Get cached preview (or null if not captured yet)
+                get(windowId) {
+                    return this._cache.get(windowId) || null;
+                },
+
+                // Clear preview when window closes
+                clear(windowId) {
+                    this._cache.delete(windowId);
+                },
+
+                // Capture all open windows
+                async captureAll(windowIds) {
+                    const results = {};
+                    for (const id of windowIds) {
+                        results[id] = await this.capture(id);
+                    }
+                    return results;
+                }
+            };
 
             // ================================================================
             // App State Storage - Persists Python app state between runs

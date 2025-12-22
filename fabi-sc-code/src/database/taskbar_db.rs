@@ -231,7 +231,8 @@ impl TaskbarDb {
     }
 
     /// Discover and register all apps from VFS /home/.system/apps/ directory
-    pub async fn discover_apps(&self) -> Result<(), String> {
+    /// Returns the number of apps found, or an error if VFS is not ready
+    pub async fn discover_apps(&self) -> Result<usize, String> {
         let apps_dir = "/home/.system/apps/";
 
         // List all subdirectories in the apps folder
@@ -275,18 +276,20 @@ impl TaskbarDb {
                     }
                 }
 
+                let app_count = available_apps.len();
+
                 // Save discovered apps
                 self.set_all_apps(available_apps).await?;
                 self.set_pinned(pinned_apps).await?;
 
-                web_sys::console::log_1(&"[Taskbar] Apps discovered from VFS".into());
+                web_sys::console::log_1(&format!("[Taskbar] Discovered {} apps from VFS", app_count).into());
+                Ok(app_count)
             }
             Err(e) => {
                 web_sys::console::warn_1(&format!("[Taskbar] Could not read apps directory: {:?}", e).into());
+                Err(format!("VFS not ready: {:?}", e))
             }
         }
-
-        Ok(())
     }
 }
 

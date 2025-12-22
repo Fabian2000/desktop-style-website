@@ -260,6 +260,7 @@ sys.stderr = ConsoleWriter()
 #[pymodule]
 mod fabiscos {
     use rustpython_vm::VirtualMachine;
+    use super::get_current_state;
 
     #[pyfunction]
     fn version(_vm: &VirtualMachine) -> String {
@@ -267,9 +268,13 @@ mod fabiscos {
     }
 
     /// Log to browser console (for debugging)
+    /// Format: [App → name] [Python] message
     #[pyfunction]
     fn log(message: String, _vm: &VirtualMachine) {
-        web_sys::console::log_1(&format!("[PyLog] {}", message).into());
+        let app_id = get_current_state()
+            .map(|s| s.borrow().app_id.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        web_sys::console::log_1(&format!("[App → {}] [Python] {}", app_id, message).into());
     }
 }
 

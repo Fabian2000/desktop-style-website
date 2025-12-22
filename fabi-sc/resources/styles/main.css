@@ -2068,6 +2068,7 @@
 
 .recents-card-wrapper {
   position: relative;
+  width: 100%;
 }
 
 .recents-trash-indicator {
@@ -2095,8 +2096,9 @@
 
 .recents-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+  width: 100%;
 }
 @media screen and (orientation: portrait) {
   .recents-list {
@@ -2113,15 +2115,16 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
   touch-action: pan-y;
+  width: 100%;
 }
 .recents-card:hover {
-  transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
 }
-.recents-card:active {
-  transform: translateY(-2px);
+.recents-card.desktop .recents-card-preview {
+  height: 180px;
 }
 
 .recents-card-header {
@@ -2173,11 +2176,20 @@
   justify-content: center;
   background: rgba(17, 17, 17, 0.5);
   color: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
 }
 @media screen and (orientation: portrait) {
   .recents-card-preview {
     height: 120px;
   }
+}
+.recents-card-preview .preview-image {
+  width: 100%;
+  height: 100%;
+  -o-object-fit: cover;
+     object-fit: cover;
+  -o-object-position: top left;
+     object-position: top left;
 }
 
 .display-none {

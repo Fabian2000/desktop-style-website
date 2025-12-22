@@ -68,16 +68,105 @@ pub struct TaskbarProps {
     #[prop_or_default]
     pub active_app: Option<String>,
     #[prop_or_default]
-    pub open_apps: Vec<String>,  // All open app IDs (for running indicator)
+    pub open_apps: Vec<String>,  // All open app IDs (for running indicator AND showing unpinned open apps)
     #[prop_or_default]
     pub on_app_click: Callback<(String, Vec<String>)>,  // Emits (app_id, args)
     #[prop_or_default]
     pub on_power_action: Callback<PowerAction>,  // Emits shutdown/restart actions
+    #[prop_or_default]
+    pub on_show_recents: Callback<()>,  // Open desktop recents view
 }
+
+/// Maximum apps to show in taskbar (reduced by 1 for recents button)
+const MAX_TASKBAR_APPS: usize = 9;
 
 /// Mobile dock apps (first 3 pinned apps)
 fn get_mobile_dock_apps(pinned: &[AppDisplayInfo]) -> Vec<AppDisplayInfo> {
     pinned.iter().take(3).cloned().collect()
+}
+
+/// Render taskbar apps: pinned apps + open unpinned apps (up to MAX_TASKBAR_APPS)
+fn render_taskbar_apps(
+    pinned_apps: &[AppDisplayInfo],
+    all_apps: &[AppDisplayInfo],
+    open_apps: &[String],
+    active_app: &Option<String>,
+    on_app_click: &Callback<(String, Vec<String>)>,
+    on_context_menu: &Callback<(MouseEvent, String)>,
+) -> Html {
+    // Collect pinned app IDs for quick lookup
+    let pinned_ids: Vec<String> = pinned_apps.iter().map(|a| a.id.clone()).collect();
+
+    // Get open apps that are NOT pinned (from all_apps since we need metadata)
+    let open_unpinned: Vec<AppDisplayInfo> = all_apps
+        .iter()
+        .filter(|app| open_apps.contains(&app.id) && !pinned_ids.contains(&app.id))
+        .cloned()
+        .collect();
+
+    // Combine: pinned first, then open unpinned, limited to MAX_TASKBAR_APPS
+    // Each entry is (app, is_pinned)
+    let mut taskbar_apps: Vec<(AppDisplayInfo, bool)> = pinned_apps
+        .iter()
+        .map(|app| (app.clone(), true))
+        .collect();
+
+    for app in open_unpinned {
+        if taskbar_apps.len() >= MAX_TASKBAR_APPS {
+            break;
+        }
+        taskbar_apps.push((app, false));
+    }
+
+    html! {
+        <>
+            { for taskbar_apps.iter().map(|(app, is_pinned)| {
+                let app_id = app.id.clone();
+                let app_path = app.path.clone();
+                let is_active = active_app.as_ref() == Some(&app_id);
+                let is_open = open_apps.contains(&app_id);
+
+                let on_click = {
+                    let on_app_click = on_app_click.clone();
+                    let app_id = app_id.clone();
+                    Callback::from(move |_| {
+                        on_app_click.emit((app_id.clone(), vec![]));
+                    })
+                };
+                let on_context = {
+                    let on_context_menu = on_context_menu.clone();
+                    let app_path = app_path.clone();
+                    Callback::from(move |e: MouseEvent| {
+                        on_context_menu.emit((e, app_path.clone()));
+                    })
+                };
+
+                // Build CSS class: active if focused, open if running, unpinned if not pinned
+                let mut classes = vec!["taskbar-item"];
+                if is_active {
+                    classes.push("active");
+                }
+                if is_open {
+                    classes.push("open");
+                }
+                if !is_pinned {
+                    classes.push("unpinned");
+                }
+                let class_str = classes.join(" ");
+
+                html! {
+                    <button
+                        class={class_str}
+                        onclick={on_click}
+                        oncontextmenu={on_context}
+                        title={app.label.clone()}
+                    >
+                        { render_icon(&app.icon, "") }
+                    </button>
+                }
+            })}
+        </>
+    }
 }
 
 /// Render an app icon - handles both image paths/data URLs and FontAwesome classes
@@ -141,9 +230,8 @@ impl Default for ContextMenuState {
 
 #[function_component(Taskbar)]
 pub fn taskbar(props: &TaskbarProps) -> Html {
-    if !props.visible {
-        return html! {};
-    }
+    // IMPORTANT: All hooks must be called unconditionally before any early returns
+    // to follow React/Yew hook rules
 
     // Pinned apps state (loaded from DB + metadata)
     let pinned_apps = use_state(Vec::<AppDisplayInfo>::new);
@@ -152,61 +240,68 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     // All available apps state (loaded from DB + metadata)
     let all_apps = use_state(Vec::<AppDisplayInfo>::new);
 
-    // Load pinned apps on mount
+    // Load pinned apps when visible changes to true (delayed load for mobile)
+    // Includes retry logic in case VFS is not yet initialized
     {
         let pinned_apps = pinned_apps.clone();
         let pinned_paths = pinned_paths.clone();
         let all_apps = all_apps.clone();
-        use_effect_with((), move |_| {
-            spawn_local(async move {
-                if let Ok(db) = TaskbarDb::open().await {
-                    // Discover apps from VFS
-                    let _ = db.discover_apps().await;
+        let visible = props.visible;
+        use_effect_with(visible, move |visible| {
+            // Only load when becoming visible
+            if *visible {
+                spawn_local(async move {
+                    // Apps are discovered during boot, we just load from IndexedDB here
+                    if let Ok(db) = TaskbarDb::open().await {
+                        // Load all available apps (already discovered during boot)
+                        let available = db.get_all_apps().await;
 
-                    // Load pinned apps
-                    let pinned = db.get_pinned().await;
-                    let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();
-                    pinned_paths.set(paths.clone());
+                        // Load pinned apps
+                        let pinned = db.get_pinned().await;
+                        let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();
+                        pinned_paths.set(paths.clone());
 
-                    // Load metadata for each pinned app
-                    let mut display_apps = Vec::new();
-                    for app in &pinned {
-                        match fetch_app_metadata(&app.path).await {
-                            Ok(metadata) => {
-                                display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
-                            }
-                            Err(e) => {
-                                web_sys::console::error_1(
-                                    &format!("[Taskbar] Failed to load metadata for {}: {}", app.path, e).into()
-                                );
+                        // Load metadata for each pinned app
+                        let mut display_apps = Vec::new();
+                        for app in &pinned {
+                            match fetch_app_metadata(&app.path).await {
+                                Ok(metadata) => {
+                                    display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
+                                }
+                                Err(e) => {
+                                    web_sys::console::error_1(
+                                        &format!("[Taskbar] Failed to load metadata for {}: {}", app.path, e).into()
+                                    );
+                                }
                             }
                         }
-                    }
-                    pinned_apps.set(display_apps);
+                        pinned_apps.set(display_apps);
 
-                    // Load all available apps
-                    let available = db.get_all_apps().await;
-                    let mut all_display = Vec::new();
-                    for app in &available {
-                        match fetch_app_metadata(&app.path).await {
-                            Ok(metadata) => {
-                                all_display.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
-                            }
-                            Err(e) => {
-                                web_sys::console::warn_1(
-                                    &format!("[Taskbar] Skipping app {}: {}", app.path, e).into()
-                                );
+                        // Load metadata for all available apps
+                        let mut all_display = Vec::new();
+                        for app in &available {
+                            match fetch_app_metadata(&app.path).await {
+                                Ok(metadata) => {
+                                    all_display.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
+                                }
+                                Err(e) => {
+                                    web_sys::console::warn_1(
+                                        &format!("[Taskbar] Skipping app {}: {}", app.path, e).into()
+                                    );
+                                }
                             }
                         }
+                        all_apps.set(all_display);
+
+                        web_sys::console::log_1(
+                            &format!("[Taskbar] Loaded {} pinned, {} total apps", pinned.len(), available.len()).into()
+                        );
                     }
-                    all_apps.set(all_display);
-                }
-            });
+                });
+            }
             || ()
         });
     }
-
-    let mobile_dock_apps = get_mobile_dock_apps(&pinned_apps);
 
     // App drawer/start menu state
     let drawer_open = use_state(|| false);
@@ -216,6 +311,100 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
     // Search state
     let search_query = use_state(String::new);
+
+    // Context menu state
+    let context_menu = use_state(ContextMenuState::default);
+
+    // Power menu state (for shutdown/restart/sleep options)
+    let power_menu_open = use_state(|| false);
+
+    // Global click listener to close DESKTOP start-menu and context menu
+    // Note: Mobile drawer is ONLY closed via swipe-down or app click, never by clicking
+    // IMPORTANT: This hook must be called before the early return
+    {
+        let drawer_open = drawer_open.clone();
+        let context_menu = context_menu.clone();
+        let search_query = search_query.clone();
+        use_effect_with((*drawer_open, context_menu.visible), move |(is_open, ctx_visible)| {
+            let document = web_sys::window().and_then(|w| w.document());
+
+            let closure = if *is_open || *ctx_visible {
+                let drawer_open = drawer_open.clone();
+                let context_menu = context_menu.clone();
+                let search_query = search_query.clone();
+                Some(Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                    if let Some(target) = e.target() {
+                        if let Some(element) = target.dyn_ref::<web_sys::Element>() {
+                            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                                // Check if click is inside context menu
+                                if let Ok(Some(ctx_menu)) = doc.query_selector(".context-menu") {
+                                    if ctx_menu.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+                                // Close context menu on outside click
+                                context_menu.set(ContextMenuState::default());
+
+                                // Mobile drawer: NEVER close on click, only swipe-down
+                                if let Ok(Some(app_drawer)) = doc.query_selector(".app-drawer") {
+                                    if app_drawer.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+                                // Also ignore clicks on mobile dock
+                                if let Ok(Some(mobile_dock)) = doc.query_selector(".mobile-dock") {
+                                    if mobile_dock.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+
+                                // Desktop start-menu: close on outside click
+                                if let Ok(Some(start_menu)) = doc.query_selector(".start-menu") {
+                                    if start_menu.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+                                if let Ok(Some(start_btn)) = doc.query_selector(".start-btn") {
+                                    if start_btn.contains(Some(element)) {
+                                        return;
+                                    }
+                                }
+                            }
+                            // Click was outside desktop start-menu - close it
+                            drawer_open.set(false);
+                            search_query.set(String::new());
+                        }
+                    }
+                }) as Box<dyn FnMut(_)>))
+            } else {
+                None
+            };
+
+            if let (Some(doc), Some(closure)) = (&document, &closure) {
+                let _ = doc.add_event_listener_with_callback(
+                    "mousedown",
+                    closure.as_ref().unchecked_ref(),
+                );
+            }
+
+            let document_for_cleanup = document.clone();
+            move || {
+                if let (Some(doc), Some(closure)) = (document_for_cleanup, closure) {
+                    let _ = doc.remove_event_listener_with_callback(
+                        "mousedown",
+                        closure.as_ref().unchecked_ref(),
+                    );
+                }
+            }
+        });
+    }
+
+    // Early return AFTER all hooks
+    if !props.visible {
+        return html! {};
+    }
+
+    let mobile_dock_apps = get_mobile_dock_apps(&pinned_apps);
 
     // Filter apps based on search query
     let filtered_apps: Vec<AppDisplayInfo> = {
@@ -233,12 +422,6 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                 .collect()
         }
     };
-
-    // Context menu state
-    let context_menu = use_state(ContextMenuState::default);
-
-    // Power menu state (for shutdown/restart/sleep options)
-    let power_menu_open = use_state(|| false);
 
     // Toggle start menu (desktop)
     let toggle_start_menu = {
@@ -317,17 +500,19 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         })
     };
 
-    // Handle right-click on taskbar item (to unpin)
+    // Handle right-click on taskbar item (to pin/unpin)
     let on_taskbar_context_menu = {
         let context_menu = context_menu.clone();
+        let pinned_paths = pinned_paths.clone();
         Callback::from(move |(e, app_path): (MouseEvent, String)| {
             e.prevent_default();
+            let is_pinned = pinned_paths.contains(&app_path);
             context_menu.set(ContextMenuState {
                 visible: true,
                 x: e.client_x(),
                 y: e.client_y(),
                 app_path,
-                is_pinned: true, // Taskbar items are always pinned
+                is_pinned,
             });
         })
     };
@@ -503,86 +688,6 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
         })
     };
 
-    // Global click listener to close DESKTOP start-menu and context menu
-    // Note: Mobile drawer is ONLY closed via swipe-down or app click, never by clicking
-    {
-        let drawer_open = drawer_open.clone();
-        let context_menu = context_menu.clone();
-        let search_query = search_query.clone();
-        use_effect_with((*drawer_open, context_menu.visible), move |(is_open, ctx_visible)| {
-            let document = web_sys::window().and_then(|w| w.document());
-
-            let closure = if *is_open || *ctx_visible {
-                let drawer_open = drawer_open.clone();
-                let context_menu = context_menu.clone();
-                let search_query = search_query.clone();
-                Some(Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
-                    if let Some(target) = e.target() {
-                        if let Some(element) = target.dyn_ref::<web_sys::Element>() {
-                            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                                // Check if click is inside context menu
-                                if let Ok(Some(ctx_menu)) = doc.query_selector(".context-menu") {
-                                    if ctx_menu.contains(Some(element)) {
-                                        return;
-                                    }
-                                }
-                                // Close context menu on outside click
-                                context_menu.set(ContextMenuState::default());
-
-                                // Mobile drawer: NEVER close on click, only swipe-down
-                                if let Ok(Some(app_drawer)) = doc.query_selector(".app-drawer") {
-                                    if app_drawer.contains(Some(element)) {
-                                        return;
-                                    }
-                                }
-                                // Also ignore clicks on mobile dock
-                                if let Ok(Some(mobile_dock)) = doc.query_selector(".mobile-dock") {
-                                    if mobile_dock.contains(Some(element)) {
-                                        return;
-                                    }
-                                }
-
-                                // Desktop start-menu: close on outside click
-                                if let Ok(Some(start_menu)) = doc.query_selector(".start-menu") {
-                                    if start_menu.contains(Some(element)) {
-                                        return;
-                                    }
-                                }
-                                if let Ok(Some(start_btn)) = doc.query_selector(".start-btn") {
-                                    if start_btn.contains(Some(element)) {
-                                        return;
-                                    }
-                                }
-                            }
-                            // Click was outside desktop start-menu - close it
-                            drawer_open.set(false);
-                            search_query.set(String::new());
-                        }
-                    }
-                }) as Box<dyn FnMut(_)>))
-            } else {
-                None
-            };
-
-            if let (Some(doc), Some(closure)) = (&document, &closure) {
-                let _ = doc.add_event_listener_with_callback(
-                    "mousedown",
-                    closure.as_ref().unchecked_ref(),
-                );
-            }
-
-            let document_for_cleanup = document.clone();
-            move || {
-                if let (Some(doc), Some(closure)) = (document_for_cleanup, closure) {
-                    let _ = doc.remove_event_listener_with_callback(
-                        "mousedown",
-                        closure.as_ref().unchecked_ref(),
-                    );
-                }
-            }
-        });
-    }
-
     // Drawer classes and style
     let drawer_class = {
         let mut classes = vec!["app-drawer"];
@@ -620,39 +725,20 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     <img class="start-logo" src="resources/img/logo_inverted_bg.webp" alt="Start" />
                 </button>
                 <div class="taskbar-separator"></div>
-                // Pinned apps from DB
-                { for pinned_apps.iter().map(|app| {
-                    let app_id = app.id.clone();
-                    let app_path = app.path.clone();
-                    let on_click = {
-                        let on_app_click = props.on_app_click.clone();
-                        let app_id = app_id.clone();
-                        Callback::from(move |_| {
-                            on_app_click.emit((app_id.clone(), vec![]));
-                        })
-                    };
-                    let on_context = {
-                        let on_taskbar_context_menu = on_taskbar_context_menu.clone();
-                        let app_path = app_path.clone();
-                        Callback::from(move |e: MouseEvent| {
-                            on_taskbar_context_menu.emit((e, app_path.clone()));
-                        })
-                    };
-
-                    let is_active = props.active_app.as_ref().map(|a| a == &app.id).unwrap_or(false);
-                    let is_open = props.open_apps.contains(&app.id);
-                    let class = match (is_active, is_open) {
-                        (true, _) => "taskbar-item active",
-                        (false, true) => "taskbar-item open",
-                        (false, false) => "taskbar-item",
-                    };
-
-                    html! {
-                        <button class={class} onclick={on_click} oncontextmenu={on_context}>
-                            { render_icon(&app.icon, "taskbar-icon") }
-                        </button>
-                    }
-                })}
+                // Recents button (after logo)
+                <button
+                    class="taskbar-item recents-btn"
+                    onclick={{
+                        let on_show_recents = props.on_show_recents.clone();
+                        Callback::from(move |_| on_show_recents.emit(()))
+                    }}
+                    title="Recent Apps"
+                >
+                    <i class="fa-solid fa-layer-group"></i>
+                </button>
+                <div class="taskbar-separator"></div>
+                // Pinned apps + open unpinned apps (up to MAX_TASKBAR_APPS)
+                { render_taskbar_apps(&pinned_apps, &all_apps, &props.open_apps, &props.active_app, &props.on_app_click, &on_taskbar_context_menu) }
             </div>
 
             // Desktop: Custom App Launcher (Start Menu)

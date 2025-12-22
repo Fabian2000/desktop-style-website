@@ -1,7 +1,11 @@
 //! Recents/App Switcher View
 //!
 //! Shows all open apps as cards that can be swiped away to close.
+//! On desktop, shows real window previews using html2canvas.
 
+use std::collections::HashMap;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{MouseEvent, TouchEvent};
 use yew::prelude::*;
 
@@ -22,15 +26,90 @@ pub struct RecentsViewProps {
     pub on_dismiss: Callback<()>,      // Close recents view
 }
 
+/// Check if we're on a desktop device (not mobile)
+fn is_desktop() -> bool {
+    if let Some(window) = web_sys::window() {
+        // Check viewport width - desktop is typically > 768px
+        if let Ok(inner_width) = window.inner_width() {
+            if let Some(width) = inner_width.as_f64() {
+                return width > 768.0;
+            }
+        }
+    }
+    false
+}
+
 #[function_component(RecentsView)]
 pub fn recents_view(props: &RecentsViewProps) -> Html {
     let swiping_card = use_state(|| Option::<String>::None);
     let swipe_offset = use_state(|| 0i32);
     let swipe_start_x = use_state(|| 0i32);
 
+    // Preview images state (desktop only) - use Rc<RefCell> to persist across renders
+    let previews = use_state(HashMap::<String, String>::new);
+
+    // Track which windows we've already captured to avoid re-capturing
+    let captured_ids = use_state(Vec::<String>::new);
+
+    // Capture previews when recents view opens (desktop only)
+    // Only capture windows we haven't captured yet
+    {
+        let previews = previews.clone();
+        let captured_ids = captured_ids.clone();
+        let apps = props.apps.clone();
+        let visible = props.visible;
+        use_effect_with(visible, move |visible| {
+            if *visible && is_desktop() {
+                let previews = previews.clone();
+                let captured_ids = captured_ids.clone();
+                let already_captured: Vec<String> = (*captured_ids).clone();
+                spawn_local(async move {
+                    let mut new_previews = (*previews).clone();
+                    let mut new_captured = already_captured.clone();
+
+                    for app in &apps {
+                        let window_id = app.window_id.clone();
+
+                        // Skip if already captured
+                        if already_captured.contains(&window_id) {
+                            continue;
+                        }
+
+                        // Try to capture preview
+                        if let Ok(previews_obj) = js_sys::Reflect::get(
+                            &web_sys::window().unwrap(),
+                            &JsValue::from_str("__windowPreviews")
+                        ) {
+                            if let Ok(capture_fn) = js_sys::Reflect::get(&previews_obj, &JsValue::from_str("capture")) {
+                                if let Some(func) = capture_fn.dyn_ref::<js_sys::Function>() {
+                                    if let Ok(result) = func.call1(&previews_obj, &JsValue::from_str(&window_id)) {
+                                        if let Ok(promise) = result.dyn_into::<js_sys::Promise>() {
+                                            if let Ok(data_url) = wasm_bindgen_futures::JsFuture::from(promise).await {
+                                                if let Some(url) = data_url.as_string() {
+                                                    new_previews.insert(window_id.clone(), url);
+                                                    new_captured.push(window_id);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    previews.set(new_previews);
+                    captured_ids.set(new_captured);
+                });
+            }
+            || ()
+        });
+    }
+
     if !props.visible {
         return html! {};
     }
+
+    let is_desktop_view = is_desktop();
 
     // Get icon for app
     let get_icon_class = |app_id: &str| -> &'static str {
@@ -205,6 +284,13 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
                                 "display: none;".to_string()
                             };
 
+                            // Get preview image for this window (desktop only)
+                            let preview_image = if is_desktop_view {
+                                previews.get(&window_id).cloned()
+                            } else {
+                                None
+                            };
+
                             html! {
                                 <div class="recents-card-wrapper">
                                     // Trash indicator - position animated based on swipe
@@ -212,7 +298,7 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
                                         <i class="fa-solid fa-trash-can"></i>
                                     </div>
                                     <div
-                                        class="recents-card"
+                                        class={if is_desktop_view { "recents-card desktop" } else { "recents-card" }}
                                         style={card_style}
                                         onclick={on_card_click}
                                         ontouchstart={on_touch_start}
@@ -229,7 +315,11 @@ pub fn recents_view(props: &RecentsViewProps) -> Html {
                                             </button>
                                         </div>
                                         <div class="recents-card-preview">
-                                            <i class={format!("{} fa-4x", icon_class)}></i>
+                                            if let Some(ref img_src) = preview_image {
+                                                <img src={img_src.clone()} alt="Window Preview" class="preview-image" />
+                                            } else {
+                                                <i class={format!("{} fa-4x", icon_class)}></i>
+                                            }
                                         </div>
                                     </div>
                                 </div>

@@ -216,11 +216,11 @@ pub(crate) async fn write_file_force(file_path: &str, data: &[u8], permissions: 
         });
     }
 
-    // Ensure parent directory exists
+    // Ensure parent directory exists (using force to bypass protection)
     if let Some(parent) = path::parent(&normalized) {
         if !exists(&parent).await? {
-            // Create parent directories
-            create_dir_all(&parent).await?;
+            // Create parent directories - use force version to bypass .system protection
+            create_dir_all_force(&parent).await?;
         }
     }
 
@@ -330,6 +330,36 @@ pub(crate) async fn create_dir_with_permissions(dir_path: &str, permissions: Per
     let node = FileNode::new_directory(&normalized, &name).with_permissions(permissions);
 
     get_storage()?.put_node(&node).await
+}
+
+/// Create a directory and all parent directories (internal - bypasses readonly check for system updates)
+pub(crate) async fn create_dir_all_force(dir_path: &str) -> Result<(), VfsError> {
+    let normalized = path::normalize(dir_path);
+    if !path::is_valid(&normalized) {
+        return Err(VfsError::InvalidPath(dir_path.to_string()));
+    }
+
+    // Build list of directories to create
+    let mut to_create = Vec::new();
+    let mut current = normalized.clone();
+
+    while !exists(&current).await? {
+        to_create.push(current.clone());
+        match path::parent(&current) {
+            Some(parent) => current = parent,
+            None => break,
+        }
+    }
+
+    // Create directories from root to leaf
+    let storage = get_storage()?;
+    for dir in to_create.into_iter().rev() {
+        let name = path::file_name(&dir).unwrap_or_default();
+        let node = FileNode::new_directory(&dir, &name);
+        storage.put_node(&node).await?;
+    }
+
+    Ok(())
 }
 
 /// Create a symlink

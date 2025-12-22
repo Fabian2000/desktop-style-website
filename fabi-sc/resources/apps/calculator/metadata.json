@@ -12,6 +12,8 @@
     "height": 400,
     "resizable": false,
     "min_width": 280,
-    "min_height": 400
+    "min_height": 400,
+    "max_width": 280,
+    "max_height": 400
   }
 }

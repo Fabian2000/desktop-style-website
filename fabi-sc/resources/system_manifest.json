@@ -54,7 +54,7 @@
     {
       "path": "/home/.system/apps/help/main.py",
       "server_path": "/resources/apps/help/main.py",
-      "hash": "help_main_v14",
+      "hash": "help_main_v17",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -134,7 +134,7 @@
     {
       "path": "/home/.system/apps/calculator/metadata.json",
       "server_path": "/resources/apps/calculator/metadata.json",
-      "hash": "calc_meta_v1",
+      "hash": "calc_meta_v2",
       "permissions": {
         "readonly": true,
         "system": true,

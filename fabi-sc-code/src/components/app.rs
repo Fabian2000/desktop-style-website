@@ -15,6 +15,7 @@ use super::shutdown_screen::ShutdownScreen;
 use super::taskbar::{PowerAction, Taskbar};
 use super::top_bar::TopBar;
 use super::workspace::Workspace;
+use crate::database::TaskbarDb;
 use crate::filesystem;
 use crate::session;
 
@@ -72,6 +73,14 @@ pub struct OpenWindow {
     pub app_path: String,
     /// Command line arguments passed to the app
     pub args: Vec<String>,
+    /// Minimum width constraint
+    pub min_width: u32,
+    /// Minimum height constraint
+    pub min_height: u32,
+    /// Maximum width constraint (0 = unlimited)
+    pub max_width: u32,
+    /// Maximum height constraint (0 = unlimited)
+    pub max_height: u32,
 }
 
 #[function_component(App)]
@@ -121,6 +130,18 @@ pub fn app() -> Html {
                     }
                     Err(e) => {
                         web_sys::console::error_1(&format!("VFS initialization failed: {}", e).into());
+                    }
+                }
+
+                // Discover and register apps from VFS (so taskbar/dock can show them)
+                if let Ok(db) = TaskbarDb::open().await {
+                    match db.discover_apps().await {
+                        Ok(count) => {
+                            web_sys::console::log_1(&format!("Boot: Discovered {} apps", count).into());
+                        }
+                        Err(e) => {
+                            web_sys::console::warn_1(&format!("Boot: App discovery failed: {}", e).into());
+                        }
                     }
                 }
 
@@ -292,7 +313,8 @@ pub fn app() -> Html {
                     // Try to read metadata.json from app directory
                     let metadata_path = format!("{}metadata.json", app_path_async);
                     web_sys::console::log_1(&format!("[App] Loading metadata from: {}", metadata_path).into());
-                    let (app_title, app_icon, app_width, app_height) = match filesystem::vfs::read_to_string(&metadata_path).await {
+                    // Returns: (title, icon, width, height, min_width, min_height, max_width, max_height)
+                    let (app_title, app_icon, app_width, app_height, app_min_w, app_min_h, app_max_w, app_max_h) = match filesystem::vfs::read_to_string(&metadata_path).await {
                         Ok(json) => {
                             web_sys::console::log_1(&format!("[App] Metadata loaded: {}", json).into());
                             match serde_json::from_str::<serde_json::Value>(&json) {
@@ -324,26 +346,43 @@ pub fn app() -> Html {
                                             }
                                         }
                                     };
-                                    let width = meta.get("window")
+                                    let window_config = meta.get("window");
+                                    let width = window_config
                                         .and_then(|w| w.get("width"))
                                         .and_then(|v| v.as_u64())
                                         .unwrap_or(600) as u32;
-                                    let height = meta.get("window")
+                                    let height = window_config
                                         .and_then(|w| w.get("height"))
                                         .and_then(|v| v.as_u64())
                                         .unwrap_or(400) as u32;
-                                    web_sys::console::log_1(&format!("[App] Parsed: title={}, icon={}, {}x{}", title, icon, width, height).into());
-                                    (title, icon, width, height)
+                                    let min_width = window_config
+                                        .and_then(|w| w.get("min_width"))
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(200) as u32;
+                                    let min_height = window_config
+                                        .and_then(|w| w.get("min_height"))
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(150) as u32;
+                                    let max_width = window_config
+                                        .and_then(|w| w.get("max_width"))
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(0) as u32;
+                                    let max_height = window_config
+                                        .and_then(|w| w.get("max_height"))
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(0) as u32;
+                                    web_sys::console::log_1(&format!("[App] Parsed: title={}, icon={}, {}x{}, min: {}x{}, max: {}x{}", title, icon, width, height, min_width, min_height, max_width, max_height).into());
+                                    (title, icon, width, height, min_width, min_height, max_width, max_height)
                                 }
                                 Err(e) => {
                                     web_sys::console::error_1(&format!("[App] JSON parse error: {}", e).into());
-                                    (app_id_async.clone(), "fa-solid fa-cube".to_string(), 600, 400)
+                                    (app_id_async.clone(), "fa-solid fa-cube".to_string(), 600, 400, 200, 150, 0, 0)
                                 }
                             }
                         }
                         Err(e) => {
                             web_sys::console::error_1(&format!("[App] Could not load metadata {}: {}", metadata_path, e).into());
-                            (app_id_async.clone(), "fa-solid fa-cube".to_string(), 600, 400)
+                            (app_id_async.clone(), "fa-solid fa-cube".to_string(), 600, 400, 200, 150, 0, 0)
                         }
                     };
 
@@ -379,6 +418,10 @@ pub fn app() -> Html {
                         python_code,
                         app_path: app_path_async,
                         args: args_async,
+                        min_width: app_min_w,
+                        min_height: app_min_h,
+                        max_width: app_max_w,
+                        max_height: app_max_h,
                     };
 
                     let mut windows = (*open_windows_async).clone();
@@ -655,6 +698,10 @@ pub fn app() -> Html {
                         width={window.width}
                         height={window.height}
                         z_index={window.z_index}
+                        min_width={window.min_width}
+                        min_height={window.min_height}
+                        max_width={window.max_width}
+                        max_height={window.max_height}
                         python_code={window.python_code.clone()}
                         app_path={window.app_path.clone()}
                         args={window.args.clone()}
@@ -675,6 +722,7 @@ pub fn app() -> Html {
                 open_apps={windows_list.iter().map(|w| w.app_id.clone()).collect::<Vec<_>>()}
                 on_app_click={on_app_click}
                 on_power_action={on_power_action}
+                on_show_recents={on_show_recents.clone()}
             />
             // Recents/App Switcher View
             <RecentsView

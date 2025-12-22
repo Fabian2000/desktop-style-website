@@ -15,6 +15,12 @@ pub struct WindowConfig {
     pub min_width: u32,
     #[serde(default = "default_min_height")]
     pub min_height: u32,
+    /// Maximum width (0 = unlimited)
+    #[serde(default)]
+    pub max_width: u32,
+    /// Maximum height (0 = unlimited)
+    #[serde(default)]
+    pub max_height: u32,
 }
 
 fn default_width() -> u32 { 400 }
@@ -30,6 +36,8 @@ impl Default for WindowConfig {
             resizable: true,
             min_width: default_min_width(),
             min_height: default_min_height(),
+            max_width: 0,
+            max_height: 0,
         }
     }
 }

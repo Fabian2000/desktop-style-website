@@ -22,10 +22,16 @@
     }
 }
 
-// Disable text selection by default (it's an app, not a document)
+// Disable text selection and drag by default (it's an app, not a document)
 * {
     user-select: none;
     -webkit-user-select: none;
+    -webkit-user-drag: none;
+}
+
+// Explicitly disable image dragging
+img {
+    -webkit-user-drag: none;
 }
 
 // Allow selection in specific areas

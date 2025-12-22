@@ -49,6 +49,7 @@
 // Wrapper for card + trash indicator
 .recents-card-wrapper {
     position: relative;
+    width: 100%;
 }
 
 // Small circle trash indicator - position controlled by JS
@@ -82,8 +83,9 @@
 
 .recents-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
+    width: 100%;
 
     @media screen and (orientation: portrait) {
         grid-template-columns: 1fr;
@@ -99,16 +101,21 @@
     border: 1px solid rgba($color-text, 0.1);
     overflow: hidden;
     cursor: pointer;
-    transition: box-shadow 0.15s ease;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
     touch-action: pan-y; // Allow vertical scroll, we handle horizontal
+    width: 100%;
 
     &:hover {
-        transform: translateY(-4px);
+        // No transform - causes grid layout bugs
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        border-color: rgba($color-text, 0.2);
     }
 
-    &:active {
-        transform: translateY(-2px);
+    // Desktop mode with larger preview area
+    &.desktop {
+        .recents-card-preview {
+            height: 180px;
+        }
     }
 }
 
@@ -164,8 +171,17 @@
     justify-content: center;
     background: rgba($color-background-dark, 0.5);
     color: rgba($color-text, 0.3);
+    overflow: hidden;
 
     @media screen and (orientation: portrait) {
         height: 120px;
+    }
+
+    // Preview image from html2canvas
+    .preview-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top left;
     }
 }

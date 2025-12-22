@@ -1866,14 +1866,11 @@
   }
 }
 
-.app-window {
-  animation: windowOpen 0.2s ease-out;
+.app-window.opening {
+  animation: windowOpen 0.2s ease-out forwards;
 }
 .app-window.closing {
   animation: windowClose 0.15s ease-in forwards;
-}
-.app-window.maximized {
-  animation: none;
 }
 
 @keyframes windowOpen {

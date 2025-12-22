@@ -281,14 +281,13 @@
 
 // Animations for windows
 .app-window {
-    animation: windowOpen 0.2s ease-out;
+    // Opening animation only when .opening class is present
+    &.opening {
+        animation: windowOpen 0.2s ease-out forwards;
+    }
 
     &.closing {
         animation: windowClose 0.15s ease-in forwards;
-    }
-
-    &.maximized {
-        animation: none;
     }
 }
 

@@ -24,6 +24,13 @@ fn restoring_flag() -> &'static Mutex<bool> {
     RESTORING.get_or_init(|| Mutex::new(false))
 }
 
+/// Global set of windows that have completed their opening animation
+/// Prevents re-animation when component re-renders
+fn opened_windows() -> &'static Mutex<std::collections::HashSet<String>> {
+    static OPENED_WINDOWS: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    OPENED_WINDOWS.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
 use crate::python::runtime::{PythonRuntime, AppExecResult};
 
 /// Window state for minimize/maximize
@@ -116,6 +123,31 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     let resizing = use_state(|| false);
     let drag_offset = use_state(|| (0i32, 0i32));
     let closing = use_state(|| false);
+
+    // Check if this window has already been opened (animation already played)
+    let already_opened = opened_windows()
+        .lock()
+        .map(|guard| guard.contains(&props.window_id))
+        .unwrap_or(false);
+    let opening = use_state(move || !already_opened);  // Only animate if not already opened
+
+    // Mark window as opened and remove opening class after animation
+    {
+        let opening = opening.clone();
+        let window_id = props.window_id.clone();
+        use_effect_with((), move |_| {
+            // Mark this window as opened in global storage
+            if let Ok(mut guard) = opened_windows().lock() {
+                guard.insert(window_id);
+            }
+            // Remove opening class after animation completes
+            wasm_bindgen_futures::spawn_local(async move {
+                gloo_timers::future::TimeoutFuture::new(300).await;
+                opening.set(false);
+            });
+            || ()
+        });
+    }
 
     // Store pre-maximize position/size for restore
     let pre_maximize = use_state(|| None::<(i32, i32, u32, u32)>);
@@ -893,9 +925,14 @@ if '__change_handler__' in dir() and __change_handler__:
     let on_close_click = {
         let closing = closing.clone();
         let on_close = props.on_close.clone();
+        let window_id = props.window_id.clone();
         Callback::from(move |e: MouseEvent| {
             e.stop_propagation();
             closing.set(true);
+            // Remove from opened_windows so it animates again when reopened
+            if let Ok(mut guard) = opened_windows().lock() {
+                guard.remove(&window_id);
+            }
             // Delay actual close for animation
             // TODO: Trigger Python on_exit event here before closing
             let on_close = on_close.clone();
@@ -969,6 +1006,9 @@ if '__change_handler__' in dir() and __change_handler__:
 
     // Window class
     let mut window_classes = vec!["app-window"];
+    if *opening && !is_mobile_view {
+        window_classes.push("opening");
+    }
     if *closing {
         window_classes.push("closing");
     }

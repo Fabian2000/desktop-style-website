@@ -741,14 +741,36 @@ if '__change_handler__' in dir() and __change_handler__:
                                 let new_y = (e.client_y() - offset_y).max(min_y).min(max_y);
                                 position_clone.set((new_x, new_y));
                             } else {
-                                // Resizing - apply min/max constraints (desktop only)
+                                // Resizing - apply min/max constraints AND desktop boundaries
                                 let (current_x, current_y) = *position_clone;
+
+                                // Get viewport dimensions for boundary checking
+                                let viewport_width = web_sys::window()
+                                    .map(|w| w.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1920.0) as i32)
+                                    .unwrap_or(1920);
+                                let viewport_height = web_sys::window()
+                                    .map(|w| w.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1080.0) as i32)
+                                    .unwrap_or(1080);
+
+                                // Workspace boundaries (same as drag)
+                                let taskbar_height = 90;
+
+                                // Calculate maximum allowed size based on window position
+                                // Window cannot extend beyond viewport right edge or taskbar
+                                let max_allowed_width = (viewport_width - current_x - 3).max(min_w as i32) as u32;
+                                let max_allowed_height = (viewport_height - taskbar_height - current_y).max(min_h as i32) as u32;
+
                                 // Prevent negative values by clamping to minimum before cast
                                 let raw_width = e.client_x() - current_x;
                                 let raw_height = e.client_y() - current_y;
                                 let mut new_width = if raw_width < 0 { min_w } else { (raw_width as u32).max(min_w) };
                                 let mut new_height = if raw_height < 0 { min_h } else { (raw_height as u32).max(min_h) };
-                                // Apply max constraints (0 = unlimited)
+
+                                // Apply desktop boundary constraints
+                                new_width = new_width.min(max_allowed_width);
+                                new_height = new_height.min(max_allowed_height);
+
+                                // Apply app-specific max constraints (0 = unlimited)
                                 if max_w > 0 {
                                     new_width = new_width.min(max_w);
                                 }
@@ -893,13 +915,22 @@ if '__change_handler__' in dir() and __change_handler__:
     };
 
     // Double-click on titlebar to maximize/restore
+    // Respects can_maximize - if max_width or max_height is set, don't allow maximize
     let on_titlebar_dblclick = {
         let window_state = window_state.clone();
         let position = position.clone();
         let size = size.clone();
         let pre_maximize = pre_maximize.clone();
+        let max_w = props.max_width;
+        let max_h = props.max_height;
         Callback::from(move |e: MouseEvent| {
             if is_mobile() {
+                return;
+            }
+            // Don't allow maximize if max constraints are set
+            let can_maximize = max_w == 0 && max_h == 0;
+            if !can_maximize && *window_state != WindowState::Maximized {
+                // Can't maximize, and not already maximized - do nothing
                 return;
             }
             e.prevent_default();
@@ -909,7 +940,7 @@ if '__change_handler__' in dir() and __change_handler__:
                     size.set((w, h));
                 }
                 window_state.set(WindowState::Normal);
-            } else {
+            } else if can_maximize {
                 let (x, y) = *position;
                 let (w, h) = *size;
                 pre_maximize.set(Some((x, y, w, h)));

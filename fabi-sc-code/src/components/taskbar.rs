@@ -8,6 +8,7 @@ use yew::prelude::*;
 
 use crate::database::{fetch_app_metadata, AppMetadata, TaskbarDb};
 use crate::filesystem;
+use crate::filesystem::events::check_and_clear_apps_dirty;
 
 /// App info for display - loaded from metadata.json
 #[derive(Clone, PartialEq)]
@@ -246,7 +247,7 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
     let all_apps = use_state(Vec::<AppDisplayInfo>::new);
 
     // Load pinned apps when visible changes to true (delayed load for mobile)
-    // Includes retry logic in case VFS is not yet initialized
+    // Also re-discovers apps if /home/apps/ was modified
     {
         let pinned_apps = pinned_apps.clone();
         let pinned_paths = pinned_paths.clone();
@@ -256,9 +257,14 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
             // Only load when becoming visible
             if *visible {
                 spawn_local(async move {
-                    // Apps are discovered during boot, we just load from IndexedDB here
                     if let Ok(db) = TaskbarDb::open().await {
-                        // Load all available apps (already discovered during boot)
+                        // Check if apps directory changed - if so, re-discover
+                        if check_and_clear_apps_dirty() {
+                            web_sys::console::log_1(&"[Taskbar] Apps changed, re-discovering...".into());
+                            let _ = db.discover_apps().await;
+                        }
+
+                        // Load all available apps
                         let available = db.get_all_apps().await;
 
                         // Load pinned apps
@@ -319,6 +325,58 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
 
     // Context menu state
     let context_menu = use_state(ContextMenuState::default);
+
+    // Re-discover apps when drawer/start-menu opens (checks dirty flag)
+    {
+        let pinned_apps = pinned_apps.clone();
+        let pinned_paths = pinned_paths.clone();
+        let all_apps = all_apps.clone();
+        let drawer_is_open = *drawer_open;
+        use_effect_with(drawer_is_open, move |is_open| {
+            if *is_open {
+                spawn_local(async move {
+                    // Check if apps directory changed - if so, re-discover
+                    if check_and_clear_apps_dirty() {
+                        web_sys::console::log_1(&"[Taskbar] Apps changed, re-discovering...".into());
+                        if let Ok(db) = TaskbarDb::open().await {
+                            let _ = db.discover_apps().await;
+
+                            // Reload all available apps
+                            let available = db.get_all_apps().await;
+
+                            // Reload pinned apps
+                            let pinned = db.get_pinned().await;
+                            let paths: Vec<String> = pinned.iter().map(|a| a.path.clone()).collect();
+                            pinned_paths.set(paths);
+
+                            // Load metadata for each pinned app
+                            let mut display_apps = Vec::new();
+                            for app in &pinned {
+                                if let Ok(metadata) = fetch_app_metadata(&app.path).await {
+                                    display_apps.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
+                                }
+                            }
+                            pinned_apps.set(display_apps);
+
+                            // Load metadata for all available apps
+                            let mut all_display = Vec::new();
+                            for app in &available {
+                                if let Ok(metadata) = fetch_app_metadata(&app.path).await {
+                                    all_display.push(AppDisplayInfo::from_metadata(&app.path, &metadata).await);
+                                }
+                            }
+                            all_apps.set(all_display);
+
+                            web_sys::console::log_1(
+                                &format!("[Taskbar] Refreshed {} pinned, {} total apps", pinned.len(), available.len()).into()
+                            );
+                        }
+                    }
+                });
+            }
+            || ()
+        });
+    }
 
     // Power menu state (for shutdown/restart/sleep options)
     let power_menu_open = use_state(|| false);

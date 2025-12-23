@@ -1,16 +1,15 @@
 {
   "id": "editor",
   "name": "Text Editor",
+  "pinned": false,
   "version": "1.0.0",
   "description": "Simple text editor for FabiScOS",
   "author": "FabiScOS",
   "icon": "icon.png",
   "entry": "main.py",
-  "pinned": false,
   "window": {
     "width": 700,
     "height": 500,
-    "resizable": true,
     "min_width": 400,
     "min_height": 300
   },

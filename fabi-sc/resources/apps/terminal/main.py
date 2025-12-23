@@ -5,8 +5,10 @@
 import fabiscos_ui as ui
 import fabiscos_vfs as vfs
 import fabiscos_window as window
-import fabiscos_system as system
 import fabiscos_state as state
+import fabiscos_time as time
+import fabiscos_archive as archive
+import fabiscos_http as http
 
 # ============================================================================
 # STYLES
@@ -65,7 +67,7 @@ class Shell:
                 " | _| / _` | '_ \\| \\__ | _|| (_) \\__ \\",
                 " |_|  \\__,_|_.__/|_|___|___\\___/|___/",
                 "",
-                "Welcome to FabiScOS Terminal v0.2.0",
+                "Welcome to FabiScOS Terminal v1.0.0",
                 "Type 'help' for available commands.",
                 ""
             ]
@@ -226,7 +228,6 @@ class Shell:
         self.register("hostname", cmd_hostname, "Print hostname")
         self.register("uname", cmd_uname, "Print system info")
         self.register("date", cmd_date, "Print current date/time")
-        self.register("uptime", cmd_uptime, "Show system uptime")
         self.register("env", cmd_env, "Print environment variables")
         self.register("export", cmd_export, "Set environment variable")
 
@@ -239,6 +240,16 @@ class Shell:
         self.register("true", cmd_true, "Return success")
         self.register("false", cmd_false, "Return failure")
         self.register("exit", cmd_exit, "Exit terminal")
+
+        # Archive
+        self.register("zip", cmd_zip, "Create ZIP archive")
+        self.register("unzip", cmd_unzip, "Extract ZIP archive")
+
+        # Network
+        self.register("wget", cmd_wget, "Download file from URL")
+
+        # App management
+        self.register("app", cmd_app, "Manage apps (create/install/uninstall)")
 
         # Sudo
         self.register("sudo", cmd_sudo, "Execute as superuser")
@@ -594,9 +605,12 @@ def cmd_help(shell, args):
         "Navigation": ["cd", "pwd", "ls"],
         "Files": ["cat", "touch", "mkdir", "rm", "rmdir", "cp", "mv"],
         "Text Processing": ["head", "tail", "grep", "sort", "uniq", "wc", "cut", "tr", "tee"],
+        "Archive": ["zip", "unzip"],
+        "Network": ["wget"],
+        "Apps": ["app"],
         "Output": ["echo", "clear"],
         "Search": ["which", "type"],
-        "System": ["whoami", "hostname", "uname", "date", "uptime", "env", "export"],
+        "System": ["whoami", "hostname", "uname", "date", "env", "export"],
         "Shell": ["history", "alias", "unalias", "exit"],
         "Other": ["sudo", "true", "false", "help"]
     }
@@ -725,13 +739,31 @@ def cmd_mkdir(shell, args):
 
 def cmd_rm(shell, args):
     """Remove file or directory"""
-    recursive = "-r" in args or "-rf" in args
+    recursive = "-r" in args or "-rf" in args or "-R" in args
     force = "-f" in args or "-rf" in args
     args = [a for a in args if not a.startswith("-")]
 
     if not args:
         shell.output("rm: missing operand")
         return 1
+
+    def remove_recursive(path):
+        """Recursively remove directory and all contents"""
+        try:
+            entries = vfs.list_dir(path)
+            for entry in entries:
+                name = entry.get("name", "")
+                if not name:
+                    continue
+                entry_path = f"{path}/{name}"
+                if entry.get("type") == "directory":
+                    remove_recursive(entry_path)
+                else:
+                    vfs.remove(entry_path)
+            # Now remove the empty directory
+            vfs.remove(path)
+        except Exception as e:
+            raise e
 
     for arg in args:
         path = shell.resolve_path(arg)
@@ -741,7 +773,24 @@ def cmd_rm(shell, args):
                     shell.output(f"rm: cannot remove '{arg}': No such file or directory")
                     return 1
             else:
-                vfs.remove(path)
+                # Check if it's a directory with content
+                is_dir = False
+                try:
+                    is_dir = vfs.is_dir(path)
+                except:
+                    pass
+
+                if is_dir:
+                    entries = vfs.list_dir(path)
+                    if entries and not recursive:
+                        shell.output(f"rm: cannot remove '{arg}': Is a directory")
+                        return 1
+                    elif entries and recursive:
+                        remove_recursive(path)
+                    else:
+                        vfs.remove(path)
+                else:
+                    vfs.remove(path)
         except Exception as e:
             shell.output(f"rm: cannot remove '{arg}': {e}")
             return 1
@@ -1203,7 +1252,7 @@ def cmd_hostname(shell, args):
 def cmd_uname(shell, args):
     """Print system info"""
     if "-a" in args:
-        shell.output("FabiScOS 0.2.0 fabiscos 1.0.0 WASM FabiScOS")
+        shell.output("FabiScOS 1.0.0 fabiscos 1.0.0 WASM FabiScOS")
     elif "-r" in args:
         shell.output("1.0.0")
     elif "-s" in args:
@@ -1214,16 +1263,13 @@ def cmd_uname(shell, args):
 
 def cmd_date(shell, args):
     """Print current date/time"""
-    # Use JavaScript Date via system module if available
     try:
-        shell.output(system.get_datetime())
+        now = time.now()
+        date_str = time.format_date(now)
+        time_str = time.format_time(now)
+        shell.output(f"{date_str} {time_str}")
     except:
         shell.output("Date not available")
-    return 0
-
-def cmd_uptime(shell, args):
-    """Show system uptime"""
-    shell.output(" up 0 days, 0:00, 1 user")
     return 0
 
 def cmd_env(shell, args):
@@ -1331,8 +1377,10 @@ def cmd_which(shell, args):
         return 1
 
     for arg in args:
-        if arg in shell.commands:
-            shell.output(f"/usr/bin/{arg}")
+        if arg in shell.aliases:
+            shell.output(f"{arg}: aliased to `{shell.aliases[arg]}'")
+        elif arg in shell.commands:
+            shell.output(f"{arg}: shell built-in command")
         else:
             shell.output(f"{arg}: not found")
             return 1
@@ -1352,6 +1400,648 @@ def cmd_type(shell, args):
         else:
             shell.output(f"bash: type: {arg}: not found")
             return 1
+    return 0
+
+def cmd_zip(shell, args):
+    """Create ZIP archive"""
+    if len(args) < 2:
+        shell.output("Usage: zip <archive.zip> <file1> [file2 ...]")
+        return 1
+
+    zip_path = shell.resolve_path(args[0])
+    files = []
+
+    for arg in args[1:]:
+        path = shell.resolve_path(arg)
+        try:
+            if vfs.is_dir(path):
+                # Add directory and all contents recursively
+                files.append(path)
+            elif vfs.exists(path):
+                files.append(path)
+            else:
+                shell.output(f"zip: {arg}: No such file or directory")
+                return 1
+        except:
+            shell.output(f"zip: {arg}: No such file or directory")
+            return 1
+
+    try:
+        archive.zip(files, zip_path)
+        shell.output(f"  adding: {len(files)} file(s)")
+        return 0
+    except Exception as e:
+        shell.output(f"zip: error creating archive: {e}")
+        return 1
+
+def cmd_unzip(shell, args):
+    """Extract ZIP archive"""
+    if not args:
+        shell.output("Usage: unzip <archive.zip> [-d <directory>]")
+        return 1
+
+    zip_path = shell.resolve_path(args[0])
+
+    # Parse -d option for destination
+    dest_dir = shell.cwd
+    if "-d" in args:
+        d_idx = args.index("-d")
+        if d_idx + 1 < len(args):
+            dest_dir = shell.resolve_path(args[d_idx + 1])
+        else:
+            shell.output("unzip: -d requires a directory argument")
+            return 1
+
+    # Check if zip file exists
+    try:
+        if not vfs.exists(zip_path):
+            shell.output(f"unzip: cannot find {args[0]}")
+            return 1
+    except:
+        shell.output(f"unzip: cannot find {args[0]}")
+        return 1
+
+    # List contents first with -l flag
+    if "-l" in args:
+        try:
+            contents = archive.list_zip(zip_path)
+            shell.output(f"Archive: {args[0]}")
+            shell.output("  Length      Name")
+            shell.output("---------  ----")
+            for item in contents:
+                shell.output(f"           {item}")
+            return 0
+        except Exception as e:
+            shell.output(f"unzip: error reading archive: {e}")
+            return 1
+
+    # Extract
+    try:
+        archive.unzip(zip_path, dest_dir)
+        shell.output(f"Archive:  {args[0]}")
+        shell.output(f"   extracting to: {dest_dir}")
+        return 0
+    except Exception as e:
+        shell.output(f"unzip: error extracting archive: {e}")
+        return 1
+
+def cmd_wget(shell, args):
+    """Download file from URL"""
+    if not args:
+        shell.output("Usage: wget <url> [-O <filename>]")
+        return 1
+
+    url = args[0]
+
+    # Parse -O option for output filename
+    output_file = None
+    if "-O" in args:
+        o_idx = args.index("-O")
+        if o_idx + 1 < len(args):
+            output_file = args[o_idx + 1]
+        else:
+            shell.output("wget: -O requires a filename argument")
+            return 1
+
+    # If no output file specified, extract from URL
+    if not output_file:
+        # Get filename from URL path
+        url_path = url.split("?")[0]  # Remove query string
+        url_path = url_path.split("#")[0]  # Remove fragment
+        if "/" in url_path:
+            output_file = url_path.split("/")[-1]
+        if not output_file:
+            output_file = "index.html"
+
+    # Resolve output path
+    output_path = shell.resolve_path(output_file)
+
+    shell.output(f"--  {url}")
+    shell.output(f"Connecting to {url.split('/')[2] if '/' in url else url}...")
+
+    try:
+        resp = http.get(url)
+
+        if resp.get("ok"):
+            content = resp.get("text", "")
+            vfs.write(output_path, content)
+            shell.output(f"Saving to: '{output_file}'")
+            shell.output(f"")
+            shell.output(f"     '{output_file}' saved [{len(content)} bytes]")
+            return 0
+        else:
+            status = resp.get("status", "unknown")
+            error = resp.get("error", "Request failed")
+            # Check for CORS-related errors
+            if status == 0 or "Failed to load" in error or "CORS" in error:
+                shell.output(f"wget: request blocked (CORS policy)")
+                shell.output(f"      The server does not allow cross-origin requests.")
+            else:
+                shell.output(f"wget: HTTP error {status}: {error}")
+            return 1
+    except Exception as e:
+        shell.output(f"wget: error downloading: {e}")
+        return 1
+
+def cmd_app(shell, args):
+    """Manage apps - create, install, uninstall, update"""
+    if not args:
+        shell.output("Usage: app <command> [args]")
+        shell.output("")
+        shell.output("Commands:")
+        shell.output("  create <name>      Create new app from template")
+        shell.output("  install [path]     Install app (default: current dir)")
+        shell.output("  uninstall <name>   Uninstall app")
+        shell.output("  update [path]      Update app (default: current dir)")
+        shell.output("  list               List installed user apps")
+        shell.output("  info <name>        Show app details")
+        return 0
+
+    subcmd = args[0]
+    subargs = args[1:]
+
+    if subcmd == "create":
+        return _app_create(shell, subargs)
+    elif subcmd == "install":
+        return _app_install(shell, subargs)
+    elif subcmd == "uninstall":
+        return _app_uninstall(shell, subargs)
+    elif subcmd == "update":
+        return _app_update(shell, subargs)
+    elif subcmd == "list":
+        return _app_list(shell, subargs)
+    elif subcmd == "info":
+        return _app_info(shell, subargs)
+    else:
+        shell.output(f"app: unknown command '{subcmd}'")
+        shell.output("Run 'app' without arguments for help")
+        return 1
+
+def _app_create(shell, args):
+    """Create a new app project in current directory (like cargo new)"""
+    if not args:
+        shell.output("Usage: app create <app_name>")
+        return 1
+
+    app_name = args[0]
+    # Sanitize app name - only allow alphanumeric, underscore, hyphen
+    app_id = ""
+    for c in app_name.lower():
+        if c.isalnum() or c in "_-":
+            app_id += c
+    if not app_id:
+        shell.output(f"app: invalid app name '{app_name}'")
+        return 1
+
+    # App directory path - create in current directory (like cargo new)
+    app_dir = f"{shell.cwd}/{app_id}"
+
+    # Check if already exists
+    try:
+        if vfs.exists(app_dir):
+            shell.output(f"app: directory '{app_id}' already exists")
+            return 1
+    except:
+        pass
+
+    # Create app directory
+    try:
+        vfs.mkdir_p(app_dir)
+    except Exception as e:
+        shell.output(f"app: failed to create directory: {e}")
+        return 1
+
+    # Create metadata.json
+    metadata = f'''{{
+  "id": "{app_id}",
+  "name": "{app_name}",
+  "version": "1.0.0",
+  "description": "My new app",
+  "author": "User",
+  "icon": "icon.png",
+  "entry": "main.py",
+  "window": {{
+    "width": 400,
+    "height": 300
+  }}
+}}'''
+
+    try:
+        vfs.write(f"{app_dir}/metadata.json", metadata)
+    except Exception as e:
+        shell.output(f"app: failed to create metadata.json: {e}")
+        return 1
+
+    # Create main.py template
+    main_py = f'''# {app_name}
+# Created with FabiScOS
+
+import fabiscos_ui as ui
+import fabiscos_window as window
+import fabiscos_state as state
+
+# Styles
+container_style = ui.style(
+    padding="20px",
+    display="flex",
+    flex_direction="column",
+    align_items="center",
+    gap="16px"
+)
+
+title_style = ui.style(
+    font_size="24px",
+    font_weight="bold",
+    color="#60a5fa"
+)
+
+# Event handlers
+def on_back():
+    window.close()
+
+def render():
+    window.set_content(
+        ui.column([
+            ui.label("{app_name}", style=title_style),
+            ui.text("Edit main.py to customize your app!")
+        ], style=container_style)
+    )
+    window.set_title("{app_name}")
+
+# Initial render
+render()
+'''
+
+    try:
+        vfs.write(f"{app_dir}/main.py", main_py)
+    except Exception as e:
+        shell.output(f"app: failed to create main.py: {e}")
+        return 1
+
+    shell.output(f"Created app '{app_name}' in {app_id}/")
+    shell.output("")
+    shell.output("Files created:")
+    shell.output(f"  {app_id}/metadata.json")
+    shell.output(f"  {app_id}/main.py")
+    shell.output("")
+    shell.output(f"To install: app install {app_id}")
+    return 0
+
+def _app_install(shell, args):
+    """Install app from a directory path"""
+    # Use current directory if no path specified
+    if args:
+        src_path = shell.resolve_path(args[0])
+    else:
+        src_path = shell.cwd
+
+    # Check if source exists
+    try:
+        if not vfs.exists(src_path):
+            shell.output(f"app: directory not found: {args[0]}")
+            return 1
+    except:
+        shell.output(f"app: directory not found: {args[0]}")
+        return 1
+
+    # Check for metadata.json
+    meta_path = f"{src_path}/metadata.json"
+    try:
+        if not vfs.exists(meta_path):
+            shell.output(f"app: no metadata.json found in {args[0]}")
+            return 1
+        meta_content = vfs.read_text(meta_path)
+    except Exception as e:
+        shell.output(f"app: failed to read metadata.json: {e}")
+        return 1
+
+    # Parse metadata to get app id
+    # Simple parsing without json module
+    app_id = None
+    for line in meta_content.split("\n"):
+        if '"id"' in line and ":" in line:
+            # Extract value between quotes after :
+            parts = line.split(":")
+            if len(parts) >= 2:
+                val = parts[1].strip().strip(",").strip('"').strip("'")
+                if val:
+                    app_id = val
+                    break
+
+    if not app_id:
+        shell.output("app: could not determine app id from metadata.json")
+        return 1
+
+    # Check for main.py
+    main_path = f"{src_path}/main.py"
+    try:
+        if not vfs.exists(main_path):
+            shell.output(f"app: no main.py found in {args[0]}")
+            return 1
+    except:
+        shell.output(f"app: no main.py found in {args[0]}")
+        return 1
+
+    # Destination path
+    dest_path = f"/home/apps/{app_id}"
+
+    # Check if already installed
+    try:
+        if vfs.exists(dest_path) and dest_path != src_path:
+            shell.output(f"app: '{app_id}' is already installed")
+            shell.output(f"     Use 'app uninstall {app_id}' first")
+            return 1
+    except:
+        pass
+
+    # If source is already in /home/apps/, it's already "installed"
+    if src_path.startswith("/home/apps/"):
+        shell.output(f"App '{app_id}' is already in apps directory")
+        return 0
+
+    # Copy files to /home/apps/
+    try:
+        vfs.mkdir_p(dest_path)
+    except:
+        pass
+
+    # Copy all files from source to destination
+    try:
+        entries = vfs.list_dir(src_path)
+        for entry in entries:
+            name = entry.get("name", "")
+            if not name:
+                continue
+            src_file = f"{src_path}/{name}"
+            dst_file = f"{dest_path}/{name}"
+            try:
+                if entry.get("type") == "directory":
+                    # Skip subdirectories for now
+                    pass
+                else:
+                    content = vfs.read_text(src_file)
+                    vfs.write(dst_file, content)
+            except:
+                pass
+
+        shell.output(f"Installed app '{app_id}' to {dest_path}")
+        return 0
+    except Exception as e:
+        shell.output(f"app: failed to install: {e}")
+        return 1
+
+def _app_uninstall(shell, args):
+    """Uninstall an app"""
+    if not args:
+        shell.output("Usage: app uninstall <app_name>")
+        return 1
+
+    app_id = args[0]
+    app_path = f"/home/apps/{app_id}"
+
+    # Check if app exists
+    try:
+        if not vfs.exists(app_path):
+            shell.output(f"app: '{app_id}' is not installed")
+            return 1
+    except:
+        shell.output(f"app: '{app_id}' is not installed")
+        return 1
+
+    # Cannot uninstall system apps
+    if app_path.startswith("/home/.system/"):
+        shell.output(f"app: cannot uninstall system app '{app_id}'")
+        return 1
+
+    # Remove app directory (recursively)
+    def remove_app_recursive(path):
+        """Recursively remove directory and all contents"""
+        entries = vfs.list_dir(path)
+        for entry in entries:
+            name = entry.get("name", "")
+            if not name:
+                continue
+            entry_path = f"{path}/{name}"
+            if entry.get("type") == "directory":
+                remove_app_recursive(entry_path)
+            else:
+                vfs.remove(entry_path)
+        vfs.remove(path)
+
+    try:
+        remove_app_recursive(app_path)
+        shell.output(f"Uninstalled app '{app_id}'")
+        return 0
+    except Exception as e:
+        shell.output(f"app: failed to uninstall: {e}")
+        return 1
+
+def _app_update(shell, args):
+    """Update an app by reinstalling from source directory"""
+    # Use current directory if no path specified
+    if args:
+        src_path = shell.resolve_path(args[0])
+    else:
+        src_path = shell.cwd
+
+    # Check if source exists
+    try:
+        if not vfs.exists(src_path):
+            shell.output(f"app: directory not found: {args[0]}")
+            return 1
+    except:
+        shell.output(f"app: directory not found: {args[0]}")
+        return 1
+
+    # Check for metadata.json to get app id
+    meta_path = f"{src_path}/metadata.json"
+    try:
+        if not vfs.exists(meta_path):
+            shell.output(f"app: no metadata.json found in {args[0]}")
+            return 1
+        meta_content = vfs.read_text(meta_path)
+    except Exception as e:
+        shell.output(f"app: failed to read metadata.json: {e}")
+        return 1
+
+    # Parse metadata to get app id
+    app_id = None
+    for line in meta_content.split("\n"):
+        if '"id"' in line and ":" in line:
+            parts = line.split(":")
+            if len(parts) >= 2:
+                val = parts[1].strip().strip(",").strip('"').strip("'")
+                if val:
+                    app_id = val
+                    break
+
+    if not app_id:
+        shell.output("app: could not determine app id from metadata.json")
+        return 1
+
+    dest_path = f"/home/apps/{app_id}"
+
+    # Check if app is installed
+    try:
+        if not vfs.exists(dest_path):
+            shell.output(f"app: '{app_id}' is not installed")
+            shell.output(f"     Use 'app install {args[0]}' to install it first")
+            return 1
+    except:
+        shell.output(f"app: '{app_id}' is not installed")
+        return 1
+
+    # Remove old version
+    def remove_app_recursive(path):
+        entries = vfs.list_dir(path)
+        for entry in entries:
+            name = entry.get("name", "")
+            if not name:
+                continue
+            entry_path = f"{path}/{name}"
+            if entry.get("type") == "directory":
+                remove_app_recursive(entry_path)
+            else:
+                vfs.remove(entry_path)
+        vfs.remove(path)
+
+    try:
+        shell.output(f"Removing old version...")
+        remove_app_recursive(dest_path)
+    except Exception as e:
+        shell.output(f"app: failed to remove old version: {e}")
+        return 1
+
+    # Install new version
+    try:
+        vfs.mkdir_p(dest_path)
+    except:
+        pass
+
+    copied = 0
+    try:
+        entries = vfs.list_dir(src_path)
+        for entry in entries:
+            name = entry.get("name", "")
+            if not name:
+                continue
+            src_file = f"{src_path}/{name}"
+            dst_file = f"{dest_path}/{name}"
+            if entry.get("type") == "directory":
+                # Skip subdirectories for now
+                pass
+            else:
+                try:
+                    content = vfs.read_text(src_file)
+                    vfs.write(dst_file, content)
+                    copied += 1
+                except Exception as e:
+                    shell.output(f"app: failed to copy {name}: {e}")
+
+        if copied == 0:
+            shell.output(f"app: no files copied - update may have failed")
+            return 1
+
+        shell.output(f"Updated app '{app_id}' ({copied} files)")
+        return 0
+    except Exception as e:
+        shell.output(f"app: failed to update: {e}")
+        return 1
+
+def _app_list(shell, args):
+    """List installed user apps"""
+    apps_dir = "/home/apps"
+
+    try:
+        if not vfs.exists(apps_dir):
+            shell.output("No user apps installed")
+            return 0
+        entries = vfs.list_dir(apps_dir)
+    except:
+        shell.output("No user apps installed")
+        return 0
+
+    apps = []
+    for entry in entries:
+        if entry.get("type") == "directory":
+            name = entry.get("name", "")
+            if name and not name.startswith("."):
+                apps.append(name)
+
+    if not apps:
+        shell.output("No user apps installed")
+        shell.output("")
+        shell.output("Create one with: app create <name>")
+        return 0
+
+    shell.output("Installed user apps:")
+    for app_id in sorted(apps):
+        # Try to get app name from metadata
+        try:
+            meta = vfs.read_text(f"{apps_dir}/{app_id}/metadata.json")
+            app_name = app_id
+            for line in meta.split("\n"):
+                if '"name"' in line and ":" in line:
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        val = parts[1].strip().strip(",").strip('"').strip("'")
+                        if val:
+                            app_name = val
+                            break
+            shell.output(f"  {app_id:20} - {app_name}")
+        except:
+            shell.output(f"  {app_id}")
+
+    return 0
+
+def _app_info(shell, args):
+    """Show app details"""
+    if not args:
+        shell.output("Usage: app info <app_name>")
+        return 1
+
+    app_id = args[0]
+
+    # Check user apps first
+    app_path = f"/home/apps/{app_id}"
+    is_system = False
+
+    try:
+        if not vfs.exists(app_path):
+            # Try system apps
+            app_path = f"/home/.system/apps/{app_id}"
+            is_system = True
+            if not vfs.exists(app_path):
+                shell.output(f"app: '{app_id}' not found")
+                return 1
+    except:
+        shell.output(f"app: '{app_id}' not found")
+        return 1
+
+    # Read metadata
+    try:
+        meta = vfs.read_text(f"{app_path}/metadata.json")
+    except:
+        shell.output(f"app: could not read metadata for '{app_id}'")
+        return 1
+
+    # Parse and display info
+    shell.output(f"App: {app_id}")
+    shell.output(f"Path: {app_path}")
+    shell.output(f"Type: {'System' if is_system else 'User'}")
+    shell.output("")
+
+    # Extract fields from metadata
+    fields = ["name", "version", "description", "author"]
+    for field in fields:
+        for line in meta.split("\n"):
+            if f'"{field}"' in line and ":" in line:
+                parts = line.split(":", 1)
+                if len(parts) >= 2:
+                    val = parts[1].strip().strip(",").strip('"').strip("'")
+                    shell.output(f"{field.capitalize():12}: {val}")
+                break
+
     return 0
 
 def cmd_true(shell, args):

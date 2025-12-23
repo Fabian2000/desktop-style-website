@@ -227,9 +227,40 @@ metadata.json:
     "description": "What the app does",
     "icon": "icon.png",
     "entry": "main.py",
-    "min_width": 400,
-    "min_height": 300
+    "window": {
+      "width": 400,
+      "height": 300,
+      "min_width": 200,
+      "min_height": 150,
+      "max_width": 0,
+      "max_height": 0
+    }
   }
+
+Window options (all optional):
+  width        - Initial width (default: 400)
+  height       - Initial height (default: 300)
+  min_width    - Minimum width (default: 200)
+  min_height   - Minimum height (default: 150)
+  max_width    - Maximum width (0 = unlimited)
+  max_height   - Maximum height (0 = unlimited)
+
+Fixed size window (not resizable):
+  Set max_width = width and max_height = height
+  Example: Calculator uses 280x400 for all values
+
+File handlers (optional):
+  Register your app to open specific file types:
+
+  "file_handlers": [
+    {
+      "name": "Open Image",
+      "extensions": ["png", "jpg", "gif", "webp"]
+    }
+  ]
+
+  When a user opens a file with a matching extension,
+  your app will be offered as an option.
 
 Minimal main.py:
   import fabiscos_ui as ui

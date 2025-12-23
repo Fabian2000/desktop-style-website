@@ -3,14 +3,15 @@
 use serde::{Deserialize, Serialize};
 
 /// Window configuration from metadata.json
+///
+/// To make a window non-resizable (fixed size), set max_width/max_height
+/// to the same values as width/height (see Calculator app).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WindowConfig {
     #[serde(default = "default_width")]
     pub width: u32,
     #[serde(default = "default_height")]
     pub height: u32,
-    #[serde(default)]
-    pub resizable: bool,
     #[serde(default = "default_min_width")]
     pub min_width: u32,
     #[serde(default = "default_min_height")]
@@ -33,7 +34,6 @@ impl Default for WindowConfig {
         Self {
             width: default_width(),
             height: default_height(),
-            resizable: true,
             min_width: default_min_width(),
             min_height: default_min_height(),
             max_width: 0,

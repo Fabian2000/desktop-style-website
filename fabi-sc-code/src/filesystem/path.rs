@@ -2,7 +2,8 @@
 /// All paths use forward slashes and start with /home/
 
 /// Maximum length for a single path segment (file/directory name)
-pub const MAX_NAME_LENGTH: usize = 255;
+/// Reduced from 255 to 100 for better UI display
+pub const MAX_NAME_LENGTH: usize = 100;
 
 /// Maximum length for a full path
 pub const MAX_PATH_LENGTH: usize = 4096;

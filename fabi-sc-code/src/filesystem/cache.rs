@@ -150,15 +150,16 @@ impl VfsCache {
             return Err(format!("Cannot write to protected path: {}", normalized));
         }
 
-        // Check if parent directory exists
+        // Check if parent directory exists and is actually a directory
         if let Some(parent_path) = path::parent(&normalized) {
-            if !self.entries.contains_key(&parent_path) {
-                return Err(format!("Parent directory does not exist: {}", parent_path));
-            }
-            // Also verify parent is actually a directory
-            if let Some(parent_entry) = self.entries.get(&parent_path) {
-                if !parent_entry.node.is_dir() {
-                    return Err(format!("Parent is not a directory: {}", parent_path));
+            // /home is always valid as parent
+            if parent_path != "/home" {
+                match self.entries.get(&parent_path) {
+                    None => return Err(format!("Parent directory does not exist: {}", parent_path)),
+                    Some(entry) if !entry.node.is_dir() => {
+                        return Err(format!("Parent is not a directory: {}", parent_path));
+                    }
+                    _ => {} // Parent exists and is a directory
                 }
             }
         }
@@ -207,16 +208,26 @@ impl VfsCache {
             return Err(format!("Cannot create directory in protected path: {}", normalized));
         }
 
-        // Check if parent directory exists (except for /home which has no parent in our system)
+        // Check if parent directory exists and is actually a directory
         if let Some(parent_path) = path::parent(&normalized) {
-            if parent_path != "/home" && !self.entries.contains_key(&parent_path) {
-                return Err(format!("Parent directory does not exist: {}", parent_path));
+            if parent_path != "/home" {
+                match self.entries.get(&parent_path) {
+                    None => return Err(format!("Parent directory does not exist: {}", parent_path)),
+                    Some(entry) if !entry.node.is_dir() => {
+                        return Err(format!("Parent is not a directory: {}", parent_path));
+                    }
+                    _ => {} // Parent exists and is a directory
+                }
             }
         }
 
         // Check if already exists
-        if self.entries.contains_key(&normalized) {
-            return Err(format!("Already exists: {}", normalized));
+        if let Some(existing) = self.entries.get(&normalized) {
+            if existing.node.is_dir() {
+                return Err(format!("Directory already exists: {}", normalized));
+            } else {
+                return Err(format!("A file with this name already exists: {}", normalized));
+            }
         }
 
         let name = path::file_name(&normalized).unwrap_or_default();
@@ -364,6 +375,18 @@ impl VfsCache {
     pub fn rename(&mut self, src: &str, dst: &str) -> Result<(), String> {
         let src_normalized = path::normalize(src);
         let dst_normalized = path::normalize(dst);
+
+        // Validate destination path (includes length, characters, emojis check)
+        if let Some(err) = path::validate_path(&dst_normalized) {
+            return Err(err);
+        }
+
+        // Also validate the new filename specifically
+        if let Some(name) = path::file_name(&dst_normalized) {
+            if let Some(err) = path::validate_name(&name) {
+                return Err(format!("Invalid filename: {}", err));
+            }
+        }
 
         // Check if source is protected
         if path::is_protected(&src_normalized) {
@@ -607,7 +630,12 @@ pub fn list_dir_sync(path: &str) -> Vec<FileNode> {
 
 /// Write file content (synchronous, persists async)
 pub fn write_sync(path: &str, content: &[u8]) -> Result<(), String> {
-    with_cache_mut(|c| c.write(path, content))
+    let normalized = super::path::normalize(path);
+    let result = with_cache_mut(|c| c.write(path, content));
+    if result.is_ok() && super::events::is_apps_path(&normalized) {
+        super::events::notify_apps_changed();
+    }
+    result
 }
 
 /// Write text file (synchronous, persists async)
@@ -618,28 +646,55 @@ pub fn write_text_sync(path: &str, content: &str) -> Result<(), String> {
 /// Create directory (synchronous, persists async)
 /// Parent directory must exist - use mkdir_p_sync to create recursively
 pub fn mkdir_sync(path: &str) -> Result<(), String> {
-    with_cache_mut(|c| c.mkdir(path))
+    let normalized = super::path::normalize(path);
+    let result = with_cache_mut(|c| c.mkdir(path));
+    if result.is_ok() && super::events::is_apps_path(&normalized) {
+        super::events::notify_apps_changed();
+    }
+    result
 }
 
 /// Create directory and all parent directories (synchronous, persists async)
 /// Like mkdir -p: creates parent directories as needed
 pub fn mkdir_p_sync(path: &str) -> Result<(), String> {
-    with_cache_mut(|c| c.mkdir_p(path))
+    let normalized = super::path::normalize(path);
+    let result = with_cache_mut(|c| c.mkdir_p(path));
+    if result.is_ok() && super::events::is_apps_path(&normalized) {
+        super::events::notify_apps_changed();
+    }
+    result
 }
 
 /// Remove file or directory (synchronous, persists async)
 pub fn remove_sync(path: &str) -> Result<(), String> {
-    with_cache_mut(|c| c.remove(path))
+    let normalized = super::path::normalize(path);
+    let result = with_cache_mut(|c| c.remove(path));
+    if result.is_ok() && super::events::is_apps_path(&normalized) {
+        super::events::notify_apps_changed();
+    }
+    result
 }
 
 /// Copy file (synchronous, persists async)
 pub fn copy_sync(src: &str, dst: &str) -> Result<(), String> {
-    with_cache_mut(|c| c.copy(src, dst))
+    let src_normalized = super::path::normalize(src);
+    let dst_normalized = super::path::normalize(dst);
+    let result = with_cache_mut(|c| c.copy(src, dst));
+    if result.is_ok() && (super::events::is_apps_path(&src_normalized) || super::events::is_apps_path(&dst_normalized)) {
+        super::events::notify_apps_changed();
+    }
+    result
 }
 
 /// Move/rename file or directory (synchronous, persists async)
 pub fn rename_sync(src: &str, dst: &str) -> Result<(), String> {
-    with_cache_mut(|c| c.rename(src, dst))
+    let src_normalized = super::path::normalize(src);
+    let dst_normalized = super::path::normalize(dst);
+    let result = with_cache_mut(|c| c.rename(src, dst));
+    if result.is_ok() && (super::events::is_apps_path(&src_normalized) || super::events::is_apps_path(&dst_normalized)) {
+        super::events::notify_apps_changed();
+    }
+    result
 }
 
 /// Get data URL for a file (for images, icons, etc.)

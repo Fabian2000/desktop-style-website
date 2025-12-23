@@ -14,7 +14,7 @@
     {
       "path": "/home/.system/apps/terminal/metadata.json",
       "server_path": "/resources/apps/terminal/metadata.json",
-      "hash": "terminal_meta_v5",
+      "hash": "terminal_meta_v7",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -24,7 +24,7 @@
     {
       "path": "/home/.system/apps/terminal/main.py",
       "server_path": "/resources/apps/terminal/main.py",
-      "hash": "terminal_main_v40",
+      "hash": "terminal_main_v55",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -54,7 +54,7 @@
     {
       "path": "/home/.system/apps/help/main.py",
       "server_path": "/resources/apps/help/main.py",
-      "hash": "help_main_v21",
+      "hash": "help_main_v24",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -84,7 +84,7 @@
     {
       "path": "/home/.system/apps/files/main.py",
       "server_path": "/resources/apps/files/main.py",
-      "hash": "files_main_v13",
+      "hash": "files_main_v15",
       "permissions": {
         "readonly": true,
         "system": true,
@@ -104,7 +104,7 @@
     {
       "path": "/home/.system/apps/editor/metadata.json",
       "server_path": "/resources/apps/editor/metadata.json",
-      "hash": "editor_meta_v2",
+      "hash": "editor_meta_v4",
       "permissions": {
         "readonly": true,
         "system": true,

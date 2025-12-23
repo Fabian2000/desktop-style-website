@@ -32,6 +32,7 @@
 //! ```
 
 pub mod cache;
+pub mod events;
 pub mod init;
 pub mod path;
 pub(crate) mod storage;

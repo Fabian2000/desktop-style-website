@@ -2,6 +2,7 @@
 //!
 //! Provides fs-like functions for file operations with permission enforcement.
 
+use crate::filesystem::events::{is_apps_path, notify_apps_changed};
 use crate::filesystem::path;
 use crate::filesystem::storage::FsStorage;
 use crate::filesystem::types::{FileNode, FileType, Permissions, VfsError, MAX_FILE_SIZE, TRASH_RETENTION_MS};
@@ -174,10 +175,14 @@ pub async fn write_file(file_path: &str, data: &[u8]) -> Result<(), VfsError> {
         }
     }
 
-    // Ensure parent directory exists
+    // Ensure parent directory exists and is actually a directory
     if let Some(parent) = path::parent(&normalized) {
-        if !exists(&parent).await? {
-            return Err(VfsError::NotFound(format!("Parent directory: {}", parent)));
+        match stat(&parent).await {
+            Err(_) => return Err(VfsError::NotFound(format!("Parent directory does not exist: {}", parent))),
+            Ok(parent_node) if !parent_node.is_dir() => {
+                return Err(VfsError::NotADirectory(format!("Parent is not a directory: {}", parent)));
+            }
+            _ => {} // Parent exists and is a directory
         }
     }
 
@@ -197,6 +202,11 @@ pub async fn write_file(file_path: &str, data: &[u8]) -> Result<(), VfsError> {
     let storage = get_storage()?;
     storage.put_node(&node).await?;
     storage.put_content(&normalized, data).await?;
+
+    // Notify if apps directory changed
+    if is_apps_path(&normalized) {
+        notify_apps_changed();
+    }
 
     Ok(())
 }
@@ -255,8 +265,12 @@ pub async fn create_dir(dir_path: &str) -> Result<(), VfsError> {
     }
 
     // Check if already exists
-    if exists(&normalized).await? {
-        return Err(VfsError::AlreadyExists(normalized));
+    if let Ok(existing) = stat(&normalized).await {
+        if existing.is_dir() {
+            return Err(VfsError::AlreadyExists(format!("Directory already exists: {}", normalized)));
+        } else {
+            return Err(VfsError::AlreadyExists(format!("A file with this name already exists: {}", normalized)));
+        }
     }
 
     // Check parent exists
@@ -276,7 +290,14 @@ pub async fn create_dir(dir_path: &str) -> Result<(), VfsError> {
     let name = path::file_name(&normalized).unwrap_or_default();
     let node = FileNode::new_directory(&normalized, &name);
 
-    get_storage()?.put_node(&node).await
+    get_storage()?.put_node(&node).await?;
+
+    // Notify if apps directory changed
+    if is_apps_path(&normalized) {
+        notify_apps_changed();
+    }
+
+    Ok(())
 }
 
 /// Create a directory and all parent directories
@@ -314,6 +335,11 @@ pub async fn create_dir_all(dir_path: &str) -> Result<(), VfsError> {
         let name = path::file_name(&dir).unwrap_or_default();
         let node = FileNode::new_directory(&dir, &name);
         storage.put_node(&node).await?;
+    }
+
+    // Notify if apps directory changed
+    if is_apps_path(&normalized) {
+        notify_apps_changed();
     }
 
     Ok(())
@@ -512,7 +538,14 @@ pub async fn remove_dir(dir_path: &str) -> Result<(), VfsError> {
         return Err(VfsError::DirectoryNotEmpty(normalized));
     }
 
-    storage.delete_node(&normalized).await
+    storage.delete_node(&normalized).await?;
+
+    // Notify if apps directory changed
+    if is_apps_path(&normalized) {
+        notify_apps_changed();
+    }
+
+    Ok(())
 }
 
 /// Remove a directory and all its contents
@@ -564,6 +597,11 @@ pub async fn remove_dir_all(dir_path: &str) -> Result<(), VfsError> {
             storage.delete_content(&node.path).await?;
         }
         storage.delete_node(&node.path).await?;
+    }
+
+    // Notify if apps directory changed
+    if is_apps_path(&normalized) {
+        notify_apps_changed();
     }
 
     Ok(())
@@ -683,6 +721,11 @@ pub async fn rename(from: &str, to: &str) -> Result<(), VfsError> {
 
         storage.put_node(&new_node).await?;
         storage.delete_node(&from_normalized).await?;
+    }
+
+    // Notify if apps directory changed (either source or target)
+    if is_apps_path(&from_normalized) || is_apps_path(&to_normalized) {
+        notify_apps_changed();
     }
 
     Ok(())

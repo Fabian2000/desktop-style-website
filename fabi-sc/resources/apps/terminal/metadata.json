@@ -9,14 +9,7 @@
   "window": {
     "width": 600,
     "height": 400,
-    "resizable": true,
     "min_width": 300,
     "min_height": 200
-  },
-  "file_handlers": [
-    {
-      "name": "Run Python Script",
-      "extensions": ["py"]
-    }
-  ]
+  }
 }

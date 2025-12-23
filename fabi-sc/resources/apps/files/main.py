@@ -596,13 +596,43 @@ def confirm_rename(value):
     save_state()
     render()
 
+def remove_recursive(path):
+    """Recursively remove directory and all contents"""
+    try:
+        entries_to_delete = vfs.list_dir(path)
+        for entry in entries_to_delete:
+            name = entry.get("name", "")
+            if not name:
+                continue
+            entry_path = path.rstrip("/") + "/" + name
+            if entry.get("type") == "directory":
+                remove_recursive(entry_path)
+            else:
+                vfs.remove(entry_path)
+        # Now remove the empty directory
+        vfs.remove(path)
+    except Exception as e:
+        raise e
+
 def confirm_delete():
     global modal_type, selected_index, entries
     if selected_index >= 0 and selected_index < len(entries):
         name = entries[selected_index]["name"]
         path = current_path.rstrip("/") + "/" + name
         try:
-            vfs.remove(path)
+            # Check if it's a directory with contents
+            is_dir = entries[selected_index]["is_dir"]
+            if is_dir:
+                dir_entries = vfs.list_dir(path)
+                if dir_entries:
+                    # Has contents - remove recursively
+                    remove_recursive(path)
+                else:
+                    # Empty directory
+                    vfs.remove(path)
+            else:
+                # Regular file
+                vfs.remove(path)
         except Exception as e:
             print(f"Error deleting: {e}")
     modal_type = None
@@ -769,7 +799,7 @@ def build_modal():
     elif modal_type == "delete":
         name = entries[selected_index]["name"] if selected_index >= 0 and selected_index < len(entries) else ""
         modal_content.append(ui.label("Delete", style=modal_title_style))
-        modal_content.append(ui.label(f"Are you sure you want to delete '{name}'?", style=ui.style(color="#cdd6f4", margin_bottom="16px")))
+        modal_content.append(ui.text(f"Are you sure you want to delete '{name}'?", style=ui.style(color="#cdd6f4", margin_bottom="16px", display="block")))
         modal_content.append(ui.row([
             ui.button("Cancel", style=modal_btn_cancel_style, on_click="close_modal"),
             ui.button("Delete", style=modal_btn_primary_style, on_click="confirm_delete"),

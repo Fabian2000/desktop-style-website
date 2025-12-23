@@ -309,18 +309,30 @@ pub fn app() -> Html {
                 // Try system apps first, then user apps
                 // System apps: /home/.system/apps/{app_id}/
                 // User apps: /home/apps/{app_id}/
-                let app_path = format!("/home/.system/apps/{}/", app_id);
+                let system_app_path = format!("/home/.system/apps/{}/", app_id);
+                let user_app_path = format!("/home/apps/{}/", app_id);
 
                 // Load Python code asynchronously, then create window
                 let open_windows_async = open_windows.clone();
                 let active_window_async = active_window.clone();
                 let window_id_async = window_id.clone();
                 let app_id_async = app_id.clone();
-                let app_path_async = app_path.clone();
+                let system_path_async = system_app_path.clone();
+                let user_path_async = user_app_path.clone();
                 let z_async = z;
                 let args_async = args.clone();
 
                 spawn_local(async move {
+                    // Determine which path to use - check system first, then user
+                    let app_path_async = {
+                        let system_meta = format!("{}metadata.json", system_path_async);
+                        if filesystem::vfs::exists(&system_meta).await.unwrap_or(false) {
+                            system_path_async
+                        } else {
+                            user_path_async
+                        }
+                    };
+
                     // Try to read metadata.json from app directory
                     let metadata_path = format!("{}metadata.json", app_path_async);
                     web_sys::console::log_1(&format!("[App] Loading metadata from: {}", metadata_path).into());

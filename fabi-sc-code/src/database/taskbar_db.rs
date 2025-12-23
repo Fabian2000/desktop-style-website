@@ -230,18 +230,25 @@ impl TaskbarDb {
         vec![]
     }
 
-    /// Discover and register all apps from VFS /home/.system/apps/ directory
+    /// Discover and register all apps from VFS
+    /// Scans both /home/.system/apps/ (system) and /home/apps/ (user) directories
     /// Returns the number of apps found, or an error if VFS is not ready
     pub async fn discover_apps(&self) -> Result<usize, String> {
-        let apps_dir = "/home/.system/apps/";
+        let system_apps_dir = "/home/.system/apps/";
+        let user_apps_dir = "/home/apps/";
 
-        // List all subdirectories in the apps folder
-        match filesystem::vfs::read_dir(apps_dir).await {
-            Ok(entries) => {
-                let mut available_apps = Vec::new();
-                let mut pinned_apps = self.get_pinned().await;
-                let mut order = pinned_apps.iter().map(|a| a.order).max().unwrap_or(0);
+        let mut available_apps = Vec::new();
+        let mut pinned_apps = self.get_pinned().await;
+        let mut order = pinned_apps.iter().map(|a| a.order).max().unwrap_or(0);
 
+        // Helper to scan a directory for apps
+        async fn scan_apps_dir(
+            apps_dir: &str,
+            available_apps: &mut Vec<AvailableApp>,
+            pinned_apps: &mut Vec<PinnedApp>,
+            order: &mut u32,
+        ) -> Result<(), String> {
+            if let Ok(entries) = filesystem::vfs::read_dir(apps_dir).await {
                 for entry in entries {
                     if entry.is_dir() {
                         let app_path = format!("{}{}/", apps_dir, entry.name);
@@ -254,42 +261,68 @@ impl TaskbarDb {
                                 path: app_path.clone(),
                             });
 
-                            // Check if app should be pinned (default: true)
-                            let should_pin = serde_json::from_str::<AppMetadata>(&json)
-                                .map(|meta| meta.pinned)
-                                .unwrap_or(true);
+                            // Check if app should be pinned
+                            // For system apps: respect pinned field, default to true
+                            // For user apps: NEVER auto-pin (user must pin manually)
+                            let is_system_app = apps_dir.contains(".system");
+                            let should_pin = if is_system_app {
+                                // System apps: use pinned field from metadata, default true
+                                serde_json::from_str::<AppMetadata>(&json)
+                                    .map(|meta| meta.pinned)
+                                    .unwrap_or(true)
+                            } else {
+                                // User apps: never auto-pin, must be pinned manually
+                                false
+                            };
 
                             if should_pin {
                                 // Auto-pin if pinned=true and not already pinned
                                 if !pinned_apps.iter().any(|p| p.path == app_path) {
-                                    order += 1;
+                                    *order += 1;
                                     pinned_apps.push(PinnedApp {
                                         path: app_path,
-                                        order,
+                                        order: *order,
                                     });
                                 }
-                            } else {
-                                // Remove from pinned if pinned=false (sync with metadata)
+                            } else if is_system_app {
+                                // Only system apps can force-unpin via metadata
+                                // User apps keep their manual pin status
                                 pinned_apps.retain(|p| p.path != app_path);
                             }
+                            // User apps: do nothing here - respect user's manual pin choice
                         }
                     }
                 }
+            }
+            Ok(())
+        }
 
-                let app_count = available_apps.len();
-
-                // Save discovered apps
-                self.set_all_apps(available_apps).await?;
-                self.set_pinned(pinned_apps).await?;
-
-                web_sys::console::log_1(&format!("[Taskbar] Discovered {} apps from VFS", app_count).into());
-                Ok(app_count)
+        // Scan system apps first
+        match filesystem::vfs::read_dir(system_apps_dir).await {
+            Ok(_) => {
+                scan_apps_dir(system_apps_dir, &mut available_apps, &mut pinned_apps, &mut order).await?;
             }
             Err(e) => {
-                web_sys::console::warn_1(&format!("[Taskbar] Could not read apps directory: {:?}", e).into());
-                Err(format!("VFS not ready: {:?}", e))
+                web_sys::console::warn_1(&format!("[Taskbar] Could not read system apps directory: {:?}", e).into());
+                return Err(format!("VFS not ready: {:?}", e));
             }
         }
+
+        // Scan user apps (ignore errors - directory may not exist)
+        let _ = scan_apps_dir(user_apps_dir, &mut available_apps, &mut pinned_apps, &mut order).await;
+
+        // Clean up pins for apps that no longer exist
+        let available_paths: std::collections::HashSet<_> = available_apps.iter().map(|a| a.path.as_str()).collect();
+        pinned_apps.retain(|p| available_paths.contains(p.path.as_str()));
+
+        let app_count = available_apps.len();
+
+        // Save discovered apps
+        self.set_all_apps(available_apps).await?;
+        self.set_pinned(pinned_apps).await?;
+
+        web_sys::console::log_1(&format!("[Taskbar] Discovered {} apps from VFS", app_count).into());
+        Ok(app_count)
     }
 }
 

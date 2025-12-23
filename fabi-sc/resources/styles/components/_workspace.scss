@@ -35,8 +35,8 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    min-width: 300px;
-    min-height: 200px;
+    min-width: 75px;
+    min-height: 75px;
 
     // Maximized state
     &.maximized {

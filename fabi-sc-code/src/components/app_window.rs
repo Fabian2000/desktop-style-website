@@ -157,9 +157,10 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     let app_error = use_state(|| None::<String>);
     let runtime_title = use_state(|| None::<String>);
 
-    // Store the input value for re-execution (when Enter is pressed)
+    // Store the input handler and value for re-execution (when Enter is pressed)
     // Using use_ref to avoid triggering re-renders when clearing
-    let pending_input = use_mut_ref(|| None::<String>);
+    // Format: (handler_name, value)
+    let pending_input = use_mut_ref(|| None::<(String, String)>);
 
     // Store whether back button was pressed (for Python on_back handler)
     let pending_back = use_mut_ref(|| false);
@@ -180,7 +181,7 @@ pub fn app_window(props: &AppWindowProps) -> Html {
     // Returns (close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request)
     fn run_app(
         code: &str,
-        input: Option<&str>,
+        input: Option<(&str, &str)>,  // (handler_name, value)
         back_pressed: bool,
         click_handler: Option<&str>,
         change_handler: Option<(&str, &str)>,  // (handler_name, value)
@@ -212,16 +213,21 @@ pub fn app_window(props: &AppWindowProps) -> Html {
         };
 
         // Prepare code with input/back/click injection if needed
-        let full_code = if let Some(input_val) = input {
-            // Inject __input__ variable and call on_input if defined
-            web_sys::console::log_1(&format!("[Python] Injecting input: {}", input_val).into());
+        let full_code = if let Some((handler, input_val)) = input {
+            // Inject __input_handler__ and __input_value__ and call the specified function
+            web_sys::console::log_1(&format!("[Python] Injecting input handler: {} with value: {}", handler, input_val).into());
             format!(
-                r#"__input__ = "{}"
+                r#"__input_handler__ = "{}"
+__input_value__ = "{}"
 {}
-if '__input__' in dir() and __input__ and 'on_input' in dir():
-    print("[Python] Calling on_input with: " + __input__)
-    on_input(__input__)
+if '__input_handler__' in dir() and __input_handler__:
+    if __input_handler__ in dir():
+        print("[Python] Calling " + __input_handler__ + " with: " + __input_value__)
+        eval(__input_handler__ + "(__input_value__)")
+    else:
+        print("[Python] WARNING: " + __input_handler__ + " not defined!")
 "#,
+                handler.replace('\\', "\\\\").replace('"', "\\\""),
                 input_val.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n"),
                 code
             )
@@ -358,7 +364,7 @@ if '__change_handler__' in dir() and __change_handler__:
 
                 let (close_requested, focus_selector, scroll_to_bottom, launch_app_request, open_file_request) = run_app(
                     code,
-                    input.as_deref(),
+                    input.as_ref().map(|(h, v)| (h.as_str(), v.as_str())),
                     back_pressed,
                     click_handler.as_deref(),
                     change_handler.as_ref().map(|(h, v)| (h.as_str(), v.as_str())),
@@ -578,16 +584,16 @@ if '__change_handler__' in dir() and __change_handler__:
                 // Check if the target is an input with data-on-submit
                 if let Some(target) = e.target() {
                     if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
-                        if input.get_attribute("data-on-submit").is_some() {
+                        if let Some(handler) = input.get_attribute("data-on-submit") {
                             e.prevent_default();
                             let value = input.value();
-                            web_sys::console::log_1(&format!("[Input] Enter pressed, value: {}", value).into());
+                            web_sys::console::log_1(&format!("[Input] Enter pressed, handler: {}, value: {}", handler, value).into());
 
                             // Clear the input
                             input.set_value("");
 
-                            // Set the pending input and trigger re-run
-                            *pending_input.borrow_mut() = Some(value);
+                            // Set the pending input (handler + value) and trigger re-run
+                            *pending_input.borrow_mut() = Some((handler, value));
                             // Increment counter via cell (always has current value)
                             // then set state to trigger re-render
                             let new_val = {

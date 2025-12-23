@@ -163,7 +163,10 @@ file_item_selected_style = ui.style(
 file_name_style = ui.style(
     color="#cdd6f4",
     flex="1",
-    font_size="13px"
+    font_size="13px",
+    overflow="hidden",
+    text_overflow="ellipsis",
+    white_space="nowrap"
 )
 
 empty_style = ui.style(
@@ -799,7 +802,14 @@ def build_modal():
     elif modal_type == "delete":
         name = entries[selected_index]["name"] if selected_index >= 0 and selected_index < len(entries) else ""
         modal_content.append(ui.label("Delete", style=modal_title_style))
-        modal_content.append(ui.text(f"Are you sure you want to delete '{name}'?", style=ui.style(color="#cdd6f4", margin_bottom="16px", display="block")))
+        modal_content.append(ui.text(f"Are you sure you want to delete '{name}'?", style=ui.style(
+            color="#cdd6f4",
+            margin_bottom="16px",
+            display="block",
+            overflow="hidden",
+            text_overflow="ellipsis",
+            white_space="nowrap"
+        )))
         modal_content.append(ui.row([
             ui.button("Cancel", style=modal_btn_cancel_style, on_click="close_modal"),
             ui.button("Delete", style=modal_btn_primary_style, on_click="confirm_delete"),
@@ -808,7 +818,14 @@ def build_modal():
     elif modal_type == "open_with":
         name = entries[selected_index]["name"] if selected_index >= 0 and selected_index < len(entries) else ""
         modal_content.append(ui.label("Open with", style=modal_title_style))
-        modal_content.append(ui.label(f"Choose an app to open '{name}'", style=ui.style(color="#6c7086", margin_bottom="16px", font_size="13px")))
+        modal_content.append(ui.label(f"Choose an app to open '{name}'", style=ui.style(
+            color="#6c7086",
+            margin_bottom="16px",
+            font_size="13px",
+            overflow="hidden",
+            text_overflow="ellipsis",
+            white_space="nowrap"
+        )))
 
         # List available apps
         app_list_style = ui.style(

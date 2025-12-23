@@ -258,11 +258,14 @@ if '__click_handler__' in dir() and __click_handler__:
                 code
             )
         } else if let Some((handler, value)) = change_handler {
-            // Inject __change_handler__ and __change_value__ and call the specified function
+            // Inject __change_handler__ and __change_value__ using hex encoding
+            // This avoids all escaping issues with quotes, newlines, etc.
+            // RustPython doesn't have base64 module, but bytes.fromhex() works
+            let value_hex = value.as_bytes().iter().map(|b| format!("{:02x}", b)).collect::<String>();
             web_sys::console::log_1(&format!("[Python] Injecting change handler: {} with value length: {}", handler, value.len()).into());
             format!(
                 r#"__change_handler__ = "{}"
-__change_value__ = """{}"""
+__change_value__ = bytes.fromhex("{}").decode("utf-8")
 {}
 if '__change_handler__' in dir() and __change_handler__:
     if __change_handler__ in dir():
@@ -271,7 +274,7 @@ if '__change_handler__' in dir() and __change_handler__:
         print("[Python] WARNING: " + __change_handler__ + " not defined!")
 "#,
                 handler.replace('\\', "\\\\").replace('"', "\\\""),
-                value.replace('\\', "\\\\").replace("\"\"\"", "\\\"\\\"\\\""),
+                value_hex,
                 code
             )
         } else {

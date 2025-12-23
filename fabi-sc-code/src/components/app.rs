@@ -92,7 +92,6 @@ pub fn app() -> Html {
 
     // Open windows state
     let open_windows = use_state(HashMap::<String, OpenWindow>::new);
-    let next_z_index = use_state(|| 100u32);
     let active_window = use_state(|| Option::<String>::None);
     let show_recents = use_state(|| false);
     let show_swipe_hint = use_state(|| false);
@@ -268,7 +267,6 @@ pub fn app() -> Html {
     // Open app callback - focus existing window or create new one
     let on_app_click = {
         let open_windows = open_windows.clone();
-        let next_z_index = next_z_index.clone();
         let active_window = active_window.clone();
         let window_counter = window_counter.clone();
         Callback::from(move |(app_id, args): (String, Vec<String>)| {
@@ -284,15 +282,27 @@ pub fn app() -> Html {
             };
 
             if let Some(window_id) = existing_window {
-                // Focus and restore existing window
-                let z = *next_z_index;
-                next_z_index.set(z + 1);
-
+                // Focus and restore existing window - redistribute z-indices
                 let mut windows = (*open_windows).clone();
-                if let Some(window) = windows.get_mut(&window_id) {
-                    window.z_index = z;
-                    window.minimized = false; // Restore if minimized
+
+                // Collect all window IDs sorted by current z-index, with focused window last
+                let mut sorted_ids: Vec<String> = windows.keys()
+                    .filter(|id| **id != window_id)
+                    .cloned()
+                    .collect();
+                sorted_ids.sort_by_key(|id| windows.get(id).map(|w| w.z_index).unwrap_or(0));
+                sorted_ids.push(window_id.clone());
+
+                // Reassign z-indices starting from 100
+                for (i, id) in sorted_ids.iter().enumerate() {
+                    if let Some(window) = windows.get_mut(id) {
+                        window.z_index = 100 + i as u32;
+                        if *id == window_id {
+                            window.minimized = false; // Restore if minimized
+                        }
+                    }
                 }
+
                 open_windows.set(windows);
                 active_window.set(Some(window_id));
             } else {
@@ -303,8 +313,8 @@ pub fn app() -> Html {
                     *c
                 };
                 let window_id = format!("window-{}", count);
-                let z = *next_z_index;
-                next_z_index.set(z + 1);
+                // New window gets highest z-index (100 + number of existing windows)
+                let z = 100 + open_windows.len() as u32;
 
                 // Try system apps first, then user apps
                 // System apps: /home/.system/apps/{app_id}/
@@ -470,20 +480,31 @@ pub fn app() -> Html {
         })
     };
 
-    // Focus window callback
+    // Focus window callback - redistributes z-indices instead of always incrementing
     let on_window_focus = {
         let open_windows = open_windows.clone();
-        let next_z_index = next_z_index.clone();
         let active_window = active_window.clone();
         Callback::from(move |window_id: String| {
-            let z = *next_z_index;
-            next_z_index.set(z + 1);
-
             let mut windows = (*open_windows).clone();
-            if let Some(window) = windows.get_mut(&window_id) {
-                window.z_index = z;
-                window.minimized = false; // Restore if minimized
+
+            // Collect all window IDs sorted by current z-index, with focused window last
+            let mut sorted_ids: Vec<String> = windows.keys()
+                .filter(|id| **id != window_id)
+                .cloned()
+                .collect();
+            sorted_ids.sort_by_key(|id| windows.get(id).map(|w| w.z_index).unwrap_or(0));
+            sorted_ids.push(window_id.clone());
+
+            // Reassign z-indices starting from 100
+            for (i, id) in sorted_ids.iter().enumerate() {
+                if let Some(window) = windows.get_mut(id) {
+                    window.z_index = 100 + i as u32;
+                    if *id == window_id {
+                        window.minimized = false; // Restore if minimized
+                    }
+                }
             }
+
             open_windows.set(windows);
             active_window.set(Some(window_id));
         })

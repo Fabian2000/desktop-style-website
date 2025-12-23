@@ -8,7 +8,7 @@
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    z-index: 300; // Above app windows
+    z-index: 10000; // Far above app windows
     display: flex;
     align-items: center;
     justify-content: center;

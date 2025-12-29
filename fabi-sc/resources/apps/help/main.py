@@ -888,70 +888,76 @@ Examples:
         "title": "Complete Example",
         "content": """Full counter app with persistence:
 
-  import fabiscos_ui as ui
-  import fabiscos_window as window
-  import fabiscos_state as state
+import fabiscos_ui as ui
+import fabiscos_window as window
+import fabiscos_state as state
 
-  # Load saved count
-  count = int(state.get("count") or "0")
+# Load saved count
+count = int(state.get("count") or "0")
 
-  # Styles
-  container = ui.style(
-      padding="20px",
-      display="flex",
-      flex_direction="column",
-      align_items="center",
-      gap="16px"
-  )
-  count_style = ui.style(
-      font_size="48px",
-      font_weight="bold",
-      color="#60a5fa"
-  )
-  btn_style = ui.style(
-      padding="12px 24px",
-      font_size="18px",
-      border_radius="8px"
-  )
+# Styles
+container = ui.style(
+    padding="20px",
+    display="flex",
+    flex_direction="column",
+    align_items="center",
+    gap="16px"
+)
 
-  def on_plus():
-      global count
-      count += 1
-      state.set("count", str(count))
-      render()
+count_style = ui.style(
+    font_size="48px",
+    font_weight="bold",
+    color="#60a5fa"
+)
 
-  def on_minus():
-      global count
-      count -= 1
-      state.set("count", str(count))
-      render()
+btn_style = ui.style(
+    padding="12px 24px",
+    font_size="18px",
+    border_radius="8px"
+)
 
-  def on_reset():
-      global count
-      count = 0
-      state.set("count", "0")
-      render()
+def on_plus():
+    global count
+    count += 1
+    state.set("count", str(count))
+    render()
 
-  def on_back():
-      window.close()
+def on_minus():
+    global count
+    count -= 1
+    state.set("count", str(count))
+    render()
 
-  def render():
-      window.set_content(
-          ui.column([
-              ui.label(str(count), style=count_style),
-              ui.row([
-                  ui.button("-", on_click="on_minus",
-                            style=btn_style),
-                  ui.button("Reset", on_click="on_reset",
-                            style=btn_style),
-                  ui.button("+", on_click="on_plus",
-                            style=btn_style)
-              ], style=ui.style(gap="8px"))
-          ], style=container)
-      )
-      window.set_title(f"Counter: {count}")
+def on_reset():
+    global count
+    count = 0
+    state.set("count", "0")
+    render()
 
-  render()"""
+def on_back():
+    window.close()
+
+def render():
+    window.set_content(
+        ui.column(
+            [
+                ui.label(str(count), style=count_style),
+                ui.row(
+                    [
+                        ui.button("-", on_click="on_minus", style=btn_style),
+                        ui.button("Reset", on_click="on_reset", style=btn_style),
+                        ui.button("+", on_click="on_plus", style=btn_style),
+                    ],
+                    style=ui.style(gap="8px"),
+                ),
+            ],
+            style=container,
+        )
+    )
+    window.set_title(f"Counter: {count}")
+
+render()
+"""
     }
 }
 

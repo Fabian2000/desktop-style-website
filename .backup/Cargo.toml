@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "fabi-sc",       # Server
-    "fabi-sc-code"   # WASM
-]
-resolver = "3"

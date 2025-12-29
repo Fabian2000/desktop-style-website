@@ -958,12 +958,12 @@ pub fn taskbar(props: &TaskbarProps) -> Html {
                     if context_menu.is_pinned {
                         <button class="context-menu-item" onclick={on_unpin_app}>
                             <i class="fa-solid fa-thumbtack"></i>
-                            <span>{"Von Taskbar lösen"}</span>
+                            <span>{"Unpin from Taskbar"}</span>
                         </button>
                     } else {
                         <button class="context-menu-item" onclick={on_pin_app}>
                             <i class="fa-solid fa-thumbtack"></i>
-                            <span>{"An Taskbar anheften"}</span>
+                            <span>{"Pin to Taskbar"}</span>
                         </button>
                     }
                 </div>

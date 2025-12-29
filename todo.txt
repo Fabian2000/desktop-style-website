@@ -1,0 +1,10 @@
+Terminal clears text on refocus
+Schedulers
+Server should only serve files from a specific folder, never from elsewhere
+ll command does not show file sizes
+Apps forget their positions when opening or closing other apps and jump away
+
+UI:
+- Video component + appropriate APIs for control
+- Browser component
+- Audio component + appropriate APIs for control
